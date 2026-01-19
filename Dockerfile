@@ -11,7 +11,7 @@ RUN apk add --no-cache \
     cron \
     openssh \
     rsync \
-    yq
+    yq-go
 
 # -------------------------
 # Install acme.sh
