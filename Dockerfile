@@ -3,15 +3,16 @@ FROM alpine:3.20
 # -------------------------
 # Packages
 # -------------------------
-RUN apk add --no-cache \
-    bash \
-    curl \
-    openssl \
-    ca-certificates \
-    cron \
-    openssh \
-    rsync \
-    yq-go
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories && \
+    apk add --no-cache \
+      bash \
+      curl \
+      openssl \
+      ca-certificates \
+      cron \
+      openssh \
+      rsync \
+      yq-go
 
 # -------------------------
 # Install acme.sh
