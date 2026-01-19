@@ -1,0 +1,27 @@
+domains:
+  - name: example.duckdns.org
+    keylength: ec-256
+
+    dns:
+      provider: duckdns
+      env:
+        DUCKDNS_TOKEN: ${DUCKDNS_TOKEN}
+
+    host:
+      host_url: root@192.168.1.1
+      dest: /jffs/nginx/example
+      reload: service restart_nginx
+
+  - name: site.example.com
+    keylength: ec-256
+
+    dns:
+      provider: cloudflare
+      env:
+        CF_Token: ${CF_API_TOKEN}
+        CF_Account_ID: ${CF_ACCOUNT_ID}
+
+    host:
+      host_url: deploy@vps.example.com
+      dest: /etc/nginx/certs/site
+      reload: systemctl reload nginx

@@ -1,0 +1,20 @@
+# DUCKDNS_TOKEN=xxxx
+# CF_API_TOKEN=yyyy
+# CF_ACCOUNT_ID=zzzz
+
+version: "3.9"
+
+services:
+  acme-worker:
+    build: .
+    container_name: acme-worker
+    restart: unless-stopped
+
+    volumes:
+      - ${DATA_DIR}/acme/state:/root/.acme.sh
+      - ${DATA_DIR}/acme/config:/acme/config
+      - ${DATA_DIR}/acme/ssh:/root/.ssh:ro
+      - ${DATA_DIR}/acme/logs:/var/log/cron
+
+    environment:
+      TZ: Europe/Ljubljana
