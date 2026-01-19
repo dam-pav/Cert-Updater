@@ -6,7 +6,7 @@ version: "3.9"
 
 services:
   acme-worker:
-    build: .
+    image: ghcr.io/dam-pav/acme-worker:latest
     container_name: acme-worker
     restart: unless-stopped
 
