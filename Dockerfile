@@ -9,7 +9,7 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/rep
       curl \
       openssl \
       ca-certificates \
-      cron \
+      cronie \
       openssh \
       rsync \
       yq-go
