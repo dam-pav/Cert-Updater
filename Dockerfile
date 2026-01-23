@@ -18,9 +18,10 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/rep
 # Install acme.sh
 # -------------------------
 RUN curl -s https://get.acme.sh | sh && \
-    chmod -R a+rX /root/.acme.sh
+    chmod -R a+rX /root/.acme.sh && \
+    ln -s /root/.acme.sh/acme.sh /usr/local/bin/acme.sh && \
+    chmod a+x /root
 
-ENV PATH="/root/.acme.sh:${PATH}"
 ENV LE_CONFIG_HOME="/acme/state"
 
 # -------------------------
