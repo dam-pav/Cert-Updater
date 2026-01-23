@@ -21,7 +21,8 @@ RUN curl -s https://get.acme.sh | sh -s -- \
     --home /opt/acme.sh \
     --install \
     --no-cron \
-    --no-profile && \
+    --no-profile \
+    || true && \
     ln -s /opt/acme.sh/acme.sh /usr/local/bin/acme.sh && \
     chmod -R a+rX /opt/acme.sh
 
