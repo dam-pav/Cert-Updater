@@ -15,4 +15,7 @@ echo "[acme-worker] Running initial certificate sync"
 echo "[acme-worker] Initial sync complete"
 echo "[acme-worker] Starting cron"
 
+# Install cron job for the current user
+echo '0 3 1 * * /usr/local/bin/acme.sh --cron --home /acme/state >> /var/log/cron/acme.log 2>&1' | crontab -
+
 exec crond -f -l 8

@@ -21,9 +21,9 @@ RUN curl -s https://get.acme.sh | sh -s -- \
     --home /opt/acme.sh \
     --install \
     --no-cron \
-    --no-profile
-
-RUN ln -s /opt/acme.sh/acme.sh /usr/local/bin/acme.sh
+    --no-profile && \
+    ln -s /opt/acme.sh/acme.sh /usr/local/bin/acme.sh && \
+    chmod -R a+rX /opt/acme.sh
 
 ENV LE_CONFIG_HOME="/acme/state"
 
@@ -47,12 +47,6 @@ COPY bin/deploy.sh     /acme/bin/deploy.sh
 COPY entrypoint.sh    /entrypoint.sh
 
 RUN chmod +x /acme/bin/*.sh /entrypoint.sh
-
-# -------------------------
-# Cron (monthly)
-# -------------------------
-RUN echo '0 3 1 * * /usr/local/bin/acme.sh --cron --home /acme/state >> /var/log/cron/acme.log 2>&1' \
-    > /etc/crontabs/root
 
 # -------------------------
 # Entrypoint

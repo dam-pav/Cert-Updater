@@ -2,6 +2,8 @@
 # CF_API_TOKEN=yyyy
 # CF_ACCOUNT_ID=zzzz
 # DATA_DIR
+# ACME_UID
+# ACME_GID
 
 version: "3.9"
 
@@ -38,9 +40,10 @@ services:
           "$$acme_base/state" \
           "$$acme_base/config" \
           "$$acme_base/ssh" \
+          "$$acme_base/export" \
           "$$acme_base/logs" || true
         echo "Adjusting ownership and permissions"
-        chown -R 1004:1002 "$$acme_base" || true
+        chown -R ${ACME_UID}:${ACME_GID} "$$acme_base" || true
         chmod 700 "$$acme_base/ssh" || true
 
         echo "acme init completed successfully"
@@ -48,9 +51,8 @@ services:
 
   acme-worker:
     image: ghcr.io/dam-pav/acme-worker:latest
-    build: .
     container_name: acme-worker
-    user: "1004:1002"
+    user: "${ACME_UID}:${ACME_GID}"
     restart: unless-stopped
 
     depends_on:
@@ -60,6 +62,7 @@ services:
     volumes:
       - ${DATA_DIR}/acme/state:/acme/state
       - ${DATA_DIR}/acme/config:/acme/config
+      - ${DATA_DIR}/acme/export:/acme/export
       - ${DATA_DIR}/acme/ssh:/acme/home/.ssh:ro
       - ${DATA_DIR}/acme/logs:/var/log/cron
 
