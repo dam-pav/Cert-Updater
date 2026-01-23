@@ -14,30 +14,41 @@ services:
   
     volumes:
       - ${DATA_DIR}:/data
-  
+
     command: >
-      sh -xc '
-        base="/data/acme"
-  
+      sh -c '
+        set -eu
+        acme_base="/data/acme"
+
+        echo "Checking /data mount..."
         if [ ! -d "/data" ]; then
           echo "ERROR: /data is not mounted"
           exit 1
         fi
-  
+
+        echo "Using base directory: $$acme_base"
+        if [ -z "$$acme_base" ]; then
+          echo "ERROR: ACME base is empty"
+          exit 1
+        fi
+
+        echo "Creating ACME directories under $$acme_base"
+        mkdir -p "$$acme_base" || true
         mkdir -p \
-          "$base/state" \
-          "$base/config" \
-          "$base/ssh" \
-          "$base/logs" || true
-  
-        chown -R 1004:1002 "$base" || true
-        chmod 700 "$base/ssh" || true
-  
+          "$$acme_base/state" \
+          "$$acme_base/config" \
+          "$$acme_base/ssh" \
+          "$$acme_base/logs" || true
+        echo "Adjusting ownership and permissions"
+        chown -R 1004:1002 "$$acme_base" || true
+        chmod 700 "$$acme_base/ssh" || true
+
         echo "acme init completed successfully"
       '
 
   acme-worker:
     image: ghcr.io/dam-pav/acme-worker:latest
+    build: .
     container_name: acme-worker
     user: "1004:1002"
     restart: unless-stopped
@@ -47,9 +58,9 @@ services:
         condition: service_completed_successfully
 
     volumes:
-      - ${DATA_DIR}/acme/state:/root/.acme.sh
+      - ${DATA_DIR}/acme/state:/acme/state
       - ${DATA_DIR}/acme/config:/acme/config
-      - ${DATA_DIR}/acme/ssh:/root/.ssh:ro
+      - ${DATA_DIR}/acme/ssh:/acme/home/.ssh:ro
       - ${DATA_DIR}/acme/logs:/var/log/cron
 
     environment:

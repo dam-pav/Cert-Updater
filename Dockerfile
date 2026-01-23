@@ -17,17 +17,26 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/rep
 # -------------------------
 # Install acme.sh
 # -------------------------
-RUN curl -s https://get.acme.sh | sh
+RUN curl -s https://get.acme.sh | sh -s -- \
+    --home /opt/acme.sh \
+    --install \
+    --no-cron \
+    --no-profile
 
-ENV PATH="/root/.acme.sh:${PATH}"
+RUN ln -s /opt/acme.sh/acme.sh /usr/local/bin/acme.sh
+
+ENV LE_CONFIG_HOME="/acme/state"
 
 # -------------------------
 # Filesystem layout
 # -------------------------
+ENV HOME=/acme/home
+
 RUN mkdir -p \
     /acme/bin \
     /acme/config \
     /acme/export \
+    /acme/home \
     /var/log/cron
 
 # -------------------------
@@ -42,7 +51,7 @@ RUN chmod +x /acme/bin/*.sh /entrypoint.sh
 # -------------------------
 # Cron (monthly)
 # -------------------------
-RUN echo '0 3 1 * * /root/.acme.sh/acme.sh --cron --home /root/.acme.sh >> /var/log/cron/acme.log 2>&1' \
+RUN echo '0 3 1 * * /usr/local/bin/acme.sh --cron --home /acme/state >> /var/log/cron/acme.log 2>&1' \
     > /etc/crontabs/root
 
 # -------------------------

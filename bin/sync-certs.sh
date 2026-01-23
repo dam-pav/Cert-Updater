@@ -2,7 +2,7 @@
 set -eu
 
 CONFIG=/acme/config/domains.yml
-ACME_HOME=/root/.acme.sh
+ACME_HOME=/acme/state
 
 die() {
   echo "ERROR: $1" >&2
