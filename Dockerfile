@@ -17,16 +17,17 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/rep
 # -------------------------
 # Install acme.sh
 # -------------------------
+ENV LE_CONFIG_HOME="/acme/state"
+
 RUN curl -s https://get.acme.sh | sh -s -- \
     --home /opt/acme.sh \
+    --config-home /acme/state \
     --install \
     --no-cron \
     --no-profile \
     || true && \
     ln -s /opt/acme.sh/acme.sh /usr/local/bin/acme.sh && \
     chmod -R a+rX /opt/acme.sh
-
-ENV LE_CONFIG_HOME="/acme/state"
 
 # -------------------------
 # Filesystem layout
