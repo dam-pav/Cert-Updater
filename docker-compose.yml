@@ -1,14 +1,50 @@
 # DUCKDNS_TOKEN=xxxx
 # CF_API_TOKEN=yyyy
 # CF_ACCOUNT_ID=zzzz
+# DATA_DIR
 
 version: "3.9"
 
 services:
+  acme-init:
+    image: alpine:3.20
+    container_name: acme-init
+    user: "0:0"
+    restart: "no"
+  
+    volumes:
+      - ${DATA_DIR}:/data
+  
+    command: >
+      sh -xc '
+        base="/data/acme"
+  
+        if [ ! -d "/data" ]; then
+          echo "ERROR: /data is not mounted"
+          exit 1
+        fi
+  
+        mkdir -p \
+          "$base/state" \
+          "$base/config" \
+          "$base/ssh" \
+          "$base/logs" || true
+  
+        chown -R 1004:1002 "$base" || true
+        chmod 700 "$base/ssh" || true
+  
+        echo "acme init completed successfully"
+      '
+
   acme-worker:
     image: ghcr.io/dam-pav/acme-worker:latest
     container_name: acme-worker
+    user: "1004:1002"
     restart: unless-stopped
+
+    depends_on:
+      acme-init:
+        condition: service_completed_successfully
 
     volumes:
       - ${DATA_DIR}/acme/state:/root/.acme.sh
