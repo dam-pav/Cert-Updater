@@ -86,19 +86,15 @@ while [ "$i" -lt "$domain_count" ]; do
   check_writable_path "$cert_dir" "certificate directory"
   check_writable_path "$export_dir" "export directory"
 
-  if [ ! -d "$cert_dir" ]; then
-    echo "  -> issuing certificate"
+  echo "  -> issuing/renewing certificate"
 
-    if [ -n "$dns_provider" ]; then
-      acme.sh --issue \
-        --dns "dns_${dns_provider}" \
-        -d "$domain" \
-        --keylength "$keylength"
-    else
-      die "Domain $domain: No DNS provider configured. DNS validation is required for certificate issuance."
-    fi
+  if [ -n "$dns_provider" ]; then
+    acme.sh --issue \
+      --dns "dns_${dns_provider}" \
+      -d "$domain" \
+      --keylength "$keylength"
   else
-    echo "  -> certificate already exists"
+    die "Domain $domain: No DNS provider configured. DNS validation is required for certificate issuance."
   fi
 
   echo "  -> installing deploy hook"
