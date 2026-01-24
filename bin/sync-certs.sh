@@ -95,7 +95,9 @@ while [ "$i" -lt "$domain_count" ]; do
         -d "$domain" \
         --keylength "$keylength"
     else
+      echo "  -> using standalone mode (requires port 80)"
       acme.sh --issue \
+        --standalone \
         -d "$domain" \
         --keylength "$keylength"
     fi
