@@ -95,17 +95,15 @@ while [ "$i" -lt "$domain_count" ]; do
         -d "$domain" \
         --keylength "$keylength"
     else
-      echo "  -> using standalone mode (requires port 80)"
-      acme.sh --issue \
-        --standalone \
-        -d "$domain" \
-        --keylength "$keylength"
+      die "Domain $domain: No DNS provider configured. DNS validation is required for certificate issuance."
     fi
   else
     echo "  -> certificate already exists"
   fi
 
   echo "  -> installing deploy hook"
+
+  mkdir -p "/acme/export/${domain}"
 
   acme.sh --install-cert -d "$domain" \
     --ecc \
