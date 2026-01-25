@@ -43,13 +43,13 @@ if [ "$domain_count" -eq 0 ]; then
   die "No domains configured in $CONFIG."
 fi
 
-# Ensure ACME account is registered (required by ZeroSSL and most CAs)
-if ! acme.sh --show-account >/dev/null 2>&1; then
-  if [ -z "${ACME_ACCOUNT_EMAIL:-}" ]; then
-    die "ACME account is not registered and ACME_ACCOUNT_EMAIL is not set. Please set ACME_ACCOUNT_EMAIL to a valid email address."
+# Register ACME account if email is provided and not already registered
+# This is optional for Let's Encrypt but recommended for expiry notifications
+if [ -n "${ACME_ACCOUNT_EMAIL:-}" ]; then
+  if ! acme.sh --show-account >/dev/null 2>&1; then
+    echo "Registering ACME account for $ACME_ACCOUNT_EMAIL"
+    acme.sh --register-account -m "$ACME_ACCOUNT_EMAIL"
   fi
-  echo "Registering ACME account for $ACME_ACCOUNT_EMAIL"
-  acme.sh --register-account -m "$ACME_ACCOUNT_EMAIL"
 fi
 
 i=0
