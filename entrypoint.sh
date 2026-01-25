@@ -21,10 +21,19 @@ echo "[acme-worker] Running initial certificate sync"
 echo "[acme-worker] Initial sync complete"
 echo "[acme-worker] Starting cron"
 
-# Create crontab file for supercronic
-cat > /tmp/crontab <<EOF
+# Create crontab directory and file for busybox crond
+# Busybox crond expects files named after the user running the jobs
+mkdir -p /acme/crontabs
+
+# Get current username (might be dynamically created)
+CRON_USER=$(whoami 2>/dev/null || echo "root")
+
+cat > "/acme/crontabs/$CRON_USER" <<EOF
 # Run certificate sync on the 1st of each month at 3:00 AM
 0 3 1 * * /acme/bin/sync-certs.sh >> /var/log/cron/acme.log 2>&1
 EOF
 
-exec supercronic /tmp/crontab
+echo "[acme-worker] Crontab installed for user: $CRON_USER"
+
+# Run busybox crond with custom crontab directory (foreground mode keeps container alive)
+exec crond -f -l 6 -c /acme/crontabs

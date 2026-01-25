@@ -10,18 +10,7 @@ RUN apk add --no-cache \
       ca-certificates \
       openssh-client \
       rsync \
-      yq-go && \
-    # Install supercronic (cron for containers, runs as non-root)
-    ARCH=$(uname -m) && \
-    case "$ARCH" in \
-      x86_64) SUPERCRONIC_ARCH="amd64" ;; \
-      aarch64) SUPERCRONIC_ARCH="arm64" ;; \
-      armv7l) SUPERCRONIC_ARCH="arm" ;; \
-      *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
-    esac && \
-    curl -fsSL "https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-${SUPERCRONIC_ARCH}" -o /usr/local/bin/supercronic && \
-    chmod +x /usr/local/bin/supercronic && \
-    /usr/local/bin/supercronic -version
+      yq-go
 
 # -------------------------
 # Install acme.sh
@@ -44,6 +33,7 @@ RUN mkdir -p \
     /acme/export \
     /acme/home/.cache \
     /acme/home/.ssh-runtime \
+    /acme/crontabs \
     /var/log/cron && \
     chmod 666 /etc/passwd
 
