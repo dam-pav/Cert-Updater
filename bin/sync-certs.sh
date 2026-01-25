@@ -123,7 +123,11 @@ while [ "$i" -lt "$domain_count" ]; do
       -d "$domain" \
       --keylength "$keylength" || issue_result=$?
     # acme.sh returns 0=success, 2=skip (not due), other=error
-    if [ "$issue_result" -ne 0 ] && [ "$issue_result" -ne 2 ]; then
+    if [ "$issue_result" -eq 2 ]; then
+      echo "  -> certificate not due for renewal, skipping deploy"
+      i=$((i + 1))
+      continue
+    elif [ "$issue_result" -ne 0 ]; then
       echo "  -> WARNING: certificate issuance failed for $domain (exit $issue_result), will retry on next run"
       i=$((i + 1))
       continue
