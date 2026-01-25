@@ -48,6 +48,23 @@ services:
         chown -R ${ACME_UID}:${ACME_GID} "$$acme_base" || true
         chmod 700 "$$acme_base/ssh" || true
 
+        # Generate SSH key if it does not exist
+        if [ ! -f "$$acme_base/ssh/id_ed25519" ]; then
+          echo "Generating SSH key..."
+          ssh-keygen -t ed25519 -f "$$acme_base/ssh/id_ed25519" -N "" -C "acme-worker"
+          chown ${ACME_UID}:${ACME_GID} "$$acme_base/ssh/id_ed25519" "$$acme_base/ssh/id_ed25519.pub"
+          chmod 600 "$$acme_base/ssh/id_ed25519"
+          chmod 644 "$$acme_base/ssh/id_ed25519.pub"
+          echo ""
+          echo "=========================================="
+          echo "NEW SSH KEY GENERATED"
+          echo "Add this public key to your target hosts:"
+          echo "=========================================="
+          cat "$$acme_base/ssh/id_ed25519.pub"
+          echo "=========================================="
+          echo ""
+        fi
+
         echo "acme init completed successfully"
       '
 
