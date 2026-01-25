@@ -18,6 +18,17 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 3. Run `docker-compose up -d`
 4. Add the generated SSH public key to your target hosts
 
+## Portainer
+
+1. Create a new "Repository" stack with
+   - Repository URL: https://github.com/dam-pav/acme-worker.git
+   - Compose path: docker-compose.yml
+2. Add Environment variables per requirements
+3. Create `domains.yml` in your config directory
+4. Add the generated SSH public key to your target hosts
+
+If you later find you need to make your own modifications to the compose file, you can simply Detach from Git anytime.
+
 ## Environment Variables
 
 ### Required
