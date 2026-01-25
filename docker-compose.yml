@@ -21,6 +21,10 @@ services:
     command: >
       sh -c '
         set -eu
+        
+        # Install openssh for ssh-keygen
+        apk add --no-cache openssh-keygen
+
         acme_base="/data/acme"
 
         echo "Checking /data mount..."
