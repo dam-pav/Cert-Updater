@@ -102,6 +102,7 @@ while [ "$i" -lt "$domain_count" ]; do
 
   if [ -n "$dns_provider" ]; then
     acme.sh --issue \
+      --server letsencrypt \
       --dns "dns_${dns_provider}" \
       -d "$domain" \
       --keylength "$keylength"
