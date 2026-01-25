@@ -23,17 +23,21 @@ echo "[acme-worker] Starting cron"
 
 # Create crontab directory and file for busybox crond
 # Busybox crond expects files named after the user running the jobs
-mkdir -p /acme/crontabs
 
 # Get current username (might be dynamically created)
 CRON_USER=$(whoami 2>/dev/null || echo "root")
+CRONTAB_FILE="/acme/crontabs/$CRON_USER"
 
-cat > "/acme/crontabs/$CRON_USER" <<EOF
+# Create default crontab only if it doesn't exist
+if [ ! -f "$CRONTAB_FILE" ]; then
+  cat > "$CRONTAB_FILE" <<EOF
 # Run certificate sync on the 1st of each month at 3:00 AM
 0 3 1 * * /acme/bin/sync-certs.sh >> /var/log/cron/acme.log 2>&1
 EOF
-
-echo "[acme-worker] Crontab installed for user: $CRON_USER"
+  echo "[acme-worker] Created default crontab for user: $CRON_USER"
+else
+  echo "[acme-worker] Using existing crontab for user: $CRON_USER"
+fi
 
 # Run busybox crond with custom crontab directory (foreground mode keeps container alive)
 exec crond -f -l 6 -c /acme/crontabs

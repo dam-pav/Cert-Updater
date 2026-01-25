@@ -47,7 +47,8 @@ services:
           "$$acme_base/ssh" \
           "$$acme_base/ssh-runtime" \
           "$$acme_base/export" \
-          "$$acme_base/logs" || true
+          "$$acme_base/logs" \
+          "$$acme_base/crontabs" || true
         echo "Adjusting ownership and permissions"
         chown -R ${ACME_UID}:${ACME_GID} "$$acme_base" || true
         chmod 700 "$$acme_base/ssh" || true
@@ -89,6 +90,7 @@ services:
       - ${DATA_DIR}/acme/ssh:/acme/home/.ssh:ro
       - ${DATA_DIR}/acme/ssh-runtime:/acme/home/.ssh-runtime
       - ${DATA_DIR}/acme/logs:/var/log/cron
+      - ${DATA_DIR}/acme/crontabs:/acme/crontabs
 
     environment:
       TZ: Europe/Ljubljana
