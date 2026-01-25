@@ -95,7 +95,7 @@ The `dns.provider` value corresponds to acme.sh DNS API plugins. Common provider
 | Provider | `dns.provider` | Required Environment Variables |
 |----------|----------------|-------------------------------|
 | Cloudflare | `cf` | `CF_Token`, `CF_Account_ID` |
-| DuckDNS | `duckdns` | `DUCKDNS_TOKEN` |
+| DuckDNS | `duckdns` | `DuckDNS_Token` |
 | Route53 | `aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | DigitalOcean | `dgon` | `DO_API_KEY` |
 

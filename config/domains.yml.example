@@ -5,7 +5,7 @@ domains:
     dns:
       provider: duckdns
       env:
-        DUCKDNS_TOKEN: ${DUCKDNS_TOKEN}
+        DuckDNS_Token: ${DUCKDNS_TOKEN}  # acme.sh expects this exact casing
 
     host:
       host_url: root@192.168.1.1
