@@ -22,7 +22,8 @@ case "$TRANSFER" in
     rsync -az -e "ssh $SSH_OPTS" "$SRC/" "$HOST_URL:$DEST/"
     ;;
   scp|*)
-    scp $SSH_OPTS "$SRC/key.pem" "$SRC/cert.pem" "$HOST_URL:$DEST/"
+    # Use -O for legacy SCP protocol (doesn't require sftp-server on remote)
+    scp -O $SSH_OPTS "$SRC/key.pem" "$SRC/cert.pem" "$HOST_URL:$DEST/"
     ;;
 esac
 
