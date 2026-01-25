@@ -28,14 +28,24 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 | `ACME_UID` | User ID for the worker container (e.g., `1000`) |
 | `ACME_GID` | Group ID for the worker container (e.g., `1000`) |
 
+### Required for Cloudflare provider
+
+| Variable | Description |
+|----------|-------------|
+| `CF_API_TOKEN` | Cloudflare API token |
+| `CF_ACCOUNT_ID` | Cloudflare Account ID |
+
+### Required for DuckDNS provider
+
+| Variable | Description |
+|----------|-------------|
+| `DUCKDNS_TOKEN` | DuckDNS token (if using DuckDNS) |
+
 ### Optional
 
 | Variable | Description |
 |----------|-------------|
 | `ACME_ACCOUNT_EMAIL` | Email for Let's Encrypt notifications (expiry warnings) |
-| `CF_API_TOKEN` | Cloudflare API token (if using Cloudflare DNS) |
-| `CF_ACCOUNT_ID` | Cloudflare Account ID (if using Cloudflare DNS) |
-| `DUCKDNS_TOKEN` | DuckDNS token (if using DuckDNS) |
 | `TZ` | Timezone (default: `UTC`) |
 
 ### Example `.env`
@@ -111,10 +121,10 @@ Currently supported:
 | Cloudflare | `cf` | `CF_Token`, `CF_Account_ID` |
 | DuckDNS | `duckdns` | `DuckDNS_Token` |
 
-Could receive suppoert in future releases:
+Could receive support in future releases:
 | Provider | `dns.provider` | Required Environment Variables |
 |----------|----------------|-------------------------------|
-| Route53 | `aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| Amazon Route 53 | `aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | DigitalOcean | `dgon` | `DO_API_KEY` |
 
 See [acme.sh DNS API documentation](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) for all supported providers.
@@ -175,6 +185,7 @@ ssh user@router "chmod 600 ~/.ssh/authorized_keys"
 ```bash
 ssh -i ${DATA_DIR}/acme/ssh/id_ed25519 user@target-host "echo success"
 ```
+A successful deployment WILL NOT ask for password.
 
 ## Cron Schedule
 
