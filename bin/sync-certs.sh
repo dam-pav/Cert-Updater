@@ -87,7 +87,10 @@ while [ "$i" -lt "$domain_count" ]; do
 
   if [ -n "$env_keys" ]; then
     for key in $env_keys; do
-      value=$(yq e "$domain_path | (.dns // {}) | .env.\"$key\" // \"\"" "$CONFIG")
+      raw_value=$(yq e "$domain_path | (.dns // {}) | .env.\"$key\" // \"\"" "$CONFIG")
+      # Expand environment variable references like ${VAR_NAME}
+      value=$(eval echo "$raw_value")
+      echo "  -> setting $key"
       export "$key=$value"
     done
   fi

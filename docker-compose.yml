@@ -70,3 +70,5 @@ services:
     environment:
       TZ: Europe/Ljubljana
       ACME_ACCOUNT_EMAIL: ${ACME_ACCOUNT_EMAIL}
+      CF_API_TOKEN: ${CF_API_TOKEN}
+      CF_ACCOUNT_ID: ${CF_ACCOUNT_ID}

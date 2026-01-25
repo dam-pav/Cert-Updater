@@ -16,7 +16,7 @@ domains:
     keylength: ec-256
 
     dns:
-      provider: cloudflare
+      provider: cf
       env:
         CF_Token: ${CF_API_TOKEN}
         CF_Account_ID: ${CF_ACCOUNT_ID}
