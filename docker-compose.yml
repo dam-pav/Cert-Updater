@@ -4,6 +4,7 @@
 # DATA_DIR
 # ACME_UID
 # ACME_GID
+# ACME_ACCOUNT_EMAIL
 
 version: "3.9"
 
@@ -68,3 +69,4 @@ services:
 
     environment:
       TZ: Europe/Ljubljana
+      ACME_ACCOUNT_EMAIL: ${ACME_ACCOUNT_EMAIL}

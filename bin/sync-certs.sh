@@ -43,6 +43,15 @@ if [ "$domain_count" -eq 0 ]; then
   die "No domains configured in $CONFIG."
 fi
 
+# Ensure ACME account is registered (required by ZeroSSL and most CAs)
+if ! acme.sh --show-account >/dev/null 2>&1; then
+  if [ -z "${ACME_ACCOUNT_EMAIL:-}" ]; then
+    die "ACME account is not registered and ACME_ACCOUNT_EMAIL is not set. Please set ACME_ACCOUNT_EMAIL to a valid email address."
+  fi
+  echo "Registering ACME account for $ACME_ACCOUNT_EMAIL"
+  acme.sh --register-account -m "$ACME_ACCOUNT_EMAIL"
+fi
+
 i=0
 while [ "$i" -lt "$domain_count" ]; do
   domain_path=.domains[$i]
