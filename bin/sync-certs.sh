@@ -101,20 +101,26 @@ while [ "$i" -lt "$domain_count" ]; do
   echo "  -> issuing/renewing certificate"
 
   if [ -n "$dns_provider" ]; then
-    acme.sh --issue \
+    if ! acme.sh --issue \
       --server letsencrypt \
       --dns "dns_${dns_provider}" \
       -d "$domain" \
-      --keylength "$keylength"
+      --keylength "$keylength"; then
+      echo "  -> WARNING: certificate issuance failed for $domain, will retry on next run"
+      i=$((i + 1))
+      continue
+    fi
   else
-    die "Domain $domain: No DNS provider configured. DNS validation is required for certificate issuance."
+    echo "  -> ERROR: Domain $domain: No DNS provider configured. Skipping."
+    i=$((i + 1))
+    continue
   fi
 
   echo "  -> installing deploy hook"
 
   mkdir -p "/acme/export/${domain}"
 
-  acme.sh --install-cert -d "$domain" \
+  if ! acme.sh --install-cert -d "$domain" \
     --ecc \
     --key-file       "/acme/export/${domain}/key.pem" \
     --fullchain-file "/acme/export/${domain}/cert.pem" \
@@ -122,7 +128,9 @@ while [ "$i" -lt "$domain_count" ]; do
                       $domain \
                       $host_url \
                       $host_dest \
-                      \"$host_reload\""
+                      \"$host_reload\""; then
+    echo "  -> WARNING: deploy failed for $domain, will retry on next run"
+  fi
 
   i=$((i + 1))
 done
