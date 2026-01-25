@@ -11,12 +11,13 @@ domains:
       host_url: root@192.168.1.1
       dest: /jffs/nginx/example
       reload: service restart_nginx
+      transfer: scp  # scp (default) or rsync
 
   - name: site.example.com
     keylength: ec-256
 
     dns:
-      provider: cf
+      provider: cf # Cloudflare DNS API
       env:
         CF_Token: ${CF_API_TOKEN}
         CF_Account_ID: ${CF_ACCOUNT_ID}
@@ -25,3 +26,4 @@ domains:
       host_url: deploy@vps.example.com
       dest: /etc/nginx/certs/site
       reload: systemctl reload nginx
+      transfer: rsync  # rsync for full Linux servers

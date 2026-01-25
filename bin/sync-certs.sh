@@ -71,6 +71,7 @@ while [ "$i" -lt "$domain_count" ]; do
   host_url=$(yq e "$domain_path.host.host_url // \"\"" "$CONFIG")
   host_dest=$(yq e "$domain_path.host.dest // \"\"" "$CONFIG")
   host_reload=$(yq e "$domain_path.host.reload // \"\"" "$CONFIG")
+  host_transfer=$(yq e "$domain_path.host.transfer // \"scp\"" "$CONFIG")
   require_value "$host_url" "Domain $domain: host.host_url is required."
   require_value "$host_dest" "Domain $domain: host.dest is required."
   require_value "$host_reload" "Domain $domain: host.reload is required."
@@ -131,7 +132,8 @@ while [ "$i" -lt "$domain_count" ]; do
                       $domain \
                       $host_url \
                       $host_dest \
-                      \"$host_reload\""; then
+                      \"$host_reload\" \
+                      $host_transfer"; then
     echo "  -> WARNING: deploy failed for $domain, will retry on next run"
   fi
 
