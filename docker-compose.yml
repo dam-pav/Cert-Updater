@@ -66,6 +66,8 @@ services:
       - ${DATA_DIR}/acme/export:/acme/export
       - ${DATA_DIR}/acme/ssh:/acme/home/.ssh:ro
       - ${DATA_DIR}/acme/logs:/var/log/cron
+    tmpfs:
+      - /var/run:mode=1777
 
     environment:
       TZ: Europe/Ljubljana

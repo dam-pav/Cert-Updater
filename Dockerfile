@@ -34,8 +34,10 @@ RUN mkdir -p \
     /acme/config \
     /acme/export \
     /acme/home \
-    /var/log/cron && \
-    chmod 666 /etc/passwd
+    /var/log/cron \
+    /var/run/crond && \
+    chmod 666 /etc/passwd && \
+    chmod 777 /var/run/crond
 
 # -------------------------
 # Copy scripts

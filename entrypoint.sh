@@ -24,4 +24,5 @@ echo "[acme-worker] Starting cron"
 # Install cron job for the current user
 echo '0 3 1 * * /usr/local/bin/acme.sh --cron --home /acme/state >> /var/log/cron/acme.log 2>&1' | crontab -
 
+# Run crond with custom PID path for non-root
 exec crond -n -s
