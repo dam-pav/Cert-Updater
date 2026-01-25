@@ -1,29 +1,32 @@
+# Host definitions - referenced by domains
+hosts:
+  router:
+    url: root@192.168.1.1
+    transfer: scp           # scp (default) or rsync
+    reload: service restart_nginx
+
+  vps:
+    url: deploy@vps.example.com
+    transfer: rsync
+    reload: systemctl reload nginx
+
+# Domain certificates
 domains:
   - name: example.duckdns.org
     keylength: ec-256
-
     dns:
       provider: duckdns
       env:
-        DuckDNS_Token: ${DUCKDNS_TOKEN}  # acme.sh expects this exact casing
-
-    host:
-      host_url: root@192.168.1.1
-      dest: /jffs/nginx/example
-      reload: service restart_nginx
-      transfer: scp  # scp (default) or rsync
+        DuckDNS_Token: ${DUCKDNS_TOKEN}
+    host: router            # reference to hosts.router
+    dest: /jffs/nginx/example
 
   - name: site.example.com
     keylength: ec-256
-
     dns:
-      provider: cf # Cloudflare DNS API
+      provider: cf
       env:
         CF_Token: ${CF_API_TOKEN}
         CF_Account_ID: ${CF_ACCOUNT_ID}
-
-    host:
-      host_url: deploy@vps.example.com
-      dest: /etc/nginx/certs/site
-      reload: systemctl reload nginx
-      transfer: rsync  # rsync for full Linux servers
+    host: vps               # reference to hosts.vps
+    dest: /etc/nginx/certs/site

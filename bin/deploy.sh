@@ -2,18 +2,22 @@
 set -e
 
 DOMAIN="$1"
-HOST_URL="$2"
-DEST="$3"
-RELOAD_CMD="$4"
-TRANSFER="${5:-scp}"  # default to scp
+HOST_NAME="$2"
+HOST_URL="$3"
+DEST="$4"
+RELOAD_CMD="$5"
+TRANSFER="${6:-scp}"  # default to scp
 
 SRC="/acme/export/${DOMAIN}"
 
-# SSH options for non-interactive use
-# Use separate writable location for known_hosts since .ssh may be read-only
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=/acme/home/.ssh-runtime/known_hosts"
+# Create host-specific directory for known_hosts
+mkdir -p "/acme/home/.ssh-runtime/${HOST_NAME}"
 
-echo "Deploying $DOMAIN to $HOST_URL:$DEST (via $TRANSFER)"
+# SSH options for non-interactive use
+# Use host-specific known_hosts file
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=/acme/home/.ssh-runtime/${HOST_NAME}/known_hosts"
+
+echo "Deploying $DOMAIN to $HOST_NAME ($HOST_URL:$DEST) via $TRANSFER"
 
 ssh $SSH_OPTS "$HOST_URL" "mkdir -p '$DEST'"
 

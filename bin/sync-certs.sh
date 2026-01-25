@@ -43,6 +43,12 @@ if [ "$domain_count" -eq 0 ]; then
   die "No domains configured in $CONFIG."
 fi
 
+# Validate hosts section exists
+hosts_count=$(yq e '.hosts // {} | keys | length' "$CONFIG")
+if [ "$hosts_count" -eq 0 ]; then
+  die "No hosts defined in $CONFIG. Add a 'hosts' section."
+fi
+
 # Register ACME account if email is provided and not already registered
 # This is optional for Let's Encrypt but recommended for expiry notifications
 if [ -n "${ACME_ACCOUNT_EMAIL:-}" ]; then
@@ -68,13 +74,21 @@ while [ "$i" -lt "$domain_count" ]; do
     require_value "$dns_provider" "Domain $domain: dns.provider is required when .dns is present."
   fi
 
-  host_url=$(yq e "$domain_path.host.host_url // \"\"" "$CONFIG")
-  host_dest=$(yq e "$domain_path.host.dest // \"\"" "$CONFIG")
-  host_reload=$(yq e "$domain_path.host.reload // \"\"" "$CONFIG")
-  host_transfer=$(yq e "$domain_path.host.transfer // \"scp\"" "$CONFIG")
-  require_value "$host_url" "Domain $domain: host.host_url is required."
-  require_value "$host_dest" "Domain $domain: host.dest is required."
-  require_value "$host_reload" "Domain $domain: host.reload is required."
+  # Get host reference and look up host details
+  host_name=$(yq e "$domain_path.host // \"\"" "$CONFIG")
+  require_value "$host_name" "Domain $domain: host is required (reference to hosts section)."
+  
+  # Look up host in hosts section
+  host_url=$(yq e ".hosts.${host_name}.url // \"\"" "$CONFIG")
+  host_transfer=$(yq e ".hosts.${host_name}.transfer // \"scp\"" "$CONFIG")
+  host_reload=$(yq e ".hosts.${host_name}.reload // \"\"" "$CONFIG")
+  
+  require_value "$host_url" "Domain $domain: host '$host_name' not found in hosts section or missing 'url'."
+  require_value "$host_reload" "Host $host_name: reload command is required."
+  
+  # dest is per-domain
+  host_dest=$(yq e "$domain_path.dest // \"\"" "$CONFIG")
+  require_value "$host_dest" "Domain $domain: dest is required."
 
   cert_dir="${ACME_HOME}/${domain}_ecc"
   export_dir="/acme/export/${domain}"
@@ -130,6 +144,7 @@ while [ "$i" -lt "$domain_count" ]; do
     --fullchain-file "/acme/export/${domain}/cert.pem" \
     --reloadcmd      "/acme/bin/deploy.sh \
                       $domain \
+                      $host_name \
                       $host_url \
                       $host_dest \
                       \"$host_reload\" \

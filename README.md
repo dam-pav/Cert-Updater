@@ -59,7 +59,9 @@ acme/
 ├── state/           # acme.sh state and certificates
 ├── export/          # Exported certificates (key.pem, cert.pem)
 ├── ssh/             # SSH keys (auto-generated)
-├── ssh-runtime/     # Runtime SSH data (known_hosts)
+├── ssh-runtime/     # Runtime SSH data (known_hosts per host)
+│   ├── router/      # known_hosts for 'router' host
+│   └── vps/         # known_hosts for 'vps' host
 ├── crontabs/        # Cron schedule (editable)
 └── logs/            # Cron logs
 ```
@@ -70,32 +72,48 @@ Place your `domains.yml` in `${DATA_DIR}/acme/config/`. See `config/domains.yml.
 
 ### Structure
 
-```yaml
-domains:
-  - name: example.com           # Domain name (required)
-    keylength: ec-256           # Key type: ec-256, ec-384, 2048, 4096 (required)
+The configuration has two sections: `hosts` (deployment targets) and `domains` (certificates).
 
-    dns:                        # DNS challenge configuration (required)
-      provider: cf              # DNS provider: cf, duckdns, etc.
-      env:                      # Environment variables for the DNS provider
+```yaml
+# Host definitions - reusable across domains
+hosts:
+  router:                         # Host identifier (referenced by domains)
+    url: root@192.168.1.1         # SSH destination (required)
+    transfer: scp                 # Transfer method: scp (default) or rsync
+    reload: service restart_nginx # Command to reload service (required)
+
+  vps:
+    url: deploy@vps.example.com
+    transfer: rsync
+    reload: systemctl reload nginx
+
+# Domain certificates
+domains:
+  - name: example.com             # Domain name (required)
+    keylength: ec-256             # Key type: ec-256, ec-384, 2048, 4096 (required)
+    host: router                  # Reference to hosts section (required)
+    dest: /opt/certs/example.com  # Remote directory for certificates (required)
+
+    dns:                          # DNS challenge configuration (required)
+      provider: cf                # DNS provider: cf, duckdns, etc.
+      env:                        # Environment variables for the DNS provider
         CF_Token: ${CF_API_TOKEN}
         CF_Account_ID: ${CF_ACCOUNT_ID}
-
-    host:                       # Deployment target (required)
-      host_url: user@host       # SSH destination (required)
-      dest: /path/to/certs      # Remote directory for certificates (required)
-      reload: systemctl reload nginx  # Command to reload service (required)
-      transfer: scp             # Transfer method: scp (default) or rsync (optional)
 ```
 
 ### DNS Providers
 
 The `dns.provider` value corresponds to acme.sh DNS API plugins. Common providers:
 
+Currently supported:
 | Provider | `dns.provider` | Required Environment Variables |
 |----------|----------------|-------------------------------|
 | Cloudflare | `cf` | `CF_Token`, `CF_Account_ID` |
 | DuckDNS | `duckdns` | `DuckDNS_Token` |
+
+Could receive suppoert in future releases:
+| Provider | `dns.provider` | Required Environment Variables |
+|----------|----------------|-------------------------------|
 | Route53 | `aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | DigitalOcean | `dgon` | `DO_API_KEY` |
 
