@@ -3,6 +3,12 @@ set -e
 
 echo "[acme-worker] Container started"
 
+# Create passwd entry for current UID if missing (required for SSH)
+if ! whoami >/dev/null 2>&1; then
+  echo "acme:x:$(id -u):$(id -g):acme:/acme/home:/bin/sh" >> /etc/passwd
+  echo "[acme-worker] Created passwd entry for UID $(id -u)"
+fi
+
 # Sanity check
 if [ ! -f /acme/config/domains.yml ]; then
   echo "[acme-worker] ERROR: /acme/config/domains.yml not found"
