@@ -21,8 +21,10 @@ echo "[acme-worker] Running initial certificate sync"
 echo "[acme-worker] Initial sync complete"
 echo "[acme-worker] Starting cron"
 
-# Install cron job for the current user
-echo '0 3 1 * * /usr/local/bin/acme.sh --cron --home /acme/state >> /var/log/cron/acme.log 2>&1' | crontab -
+# Create crontab file for supercronic
+cat > /tmp/crontab <<EOF
+# Run certificate sync on the 1st of each month at 3:00 AM
+0 3 1 * * /acme/bin/sync-certs.sh >> /var/log/cron/acme.log 2>&1
+EOF
 
-# Run crond with custom PID path for non-root
-exec crond -n -s
+exec supercronic /tmp/crontab

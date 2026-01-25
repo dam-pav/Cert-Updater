@@ -41,6 +41,7 @@ services:
           "$$acme_base/state" \
           "$$acme_base/config" \
           "$$acme_base/ssh" \
+          "$$acme_base/ssh-runtime" \
           "$$acme_base/export" \
           "$$acme_base/logs" || true
         echo "Adjusting ownership and permissions"
@@ -65,9 +66,8 @@ services:
       - ${DATA_DIR}/acme/config:/acme/config
       - ${DATA_DIR}/acme/export:/acme/export
       - ${DATA_DIR}/acme/ssh:/acme/home/.ssh:ro
+      - ${DATA_DIR}/acme/ssh-runtime:/acme/home/.ssh-runtime
       - ${DATA_DIR}/acme/logs:/var/log/cron
-    tmpfs:
-      - /var/run:mode=1777
 
     environment:
       TZ: Europe/Ljubljana

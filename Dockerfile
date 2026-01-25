@@ -3,16 +3,17 @@ FROM alpine:3.20
 # -------------------------
 # Packages
 # -------------------------
-RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories && \
-    apk add --no-cache \
+RUN apk add --no-cache \
       bash \
       curl \
       openssl \
       ca-certificates \
-      cronie \
-      openssh \
+      openssh-client \
       rsync \
-      yq-go
+      yq-go && \
+    # Install supercronic (cron for containers, runs as non-root)
+    curl -fsSL https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64 -o /usr/local/bin/supercronic && \
+    chmod +x /usr/local/bin/supercronic
 
 # -------------------------
 # Install acme.sh
@@ -33,11 +34,10 @@ RUN mkdir -p \
     /acme/bin \
     /acme/config \
     /acme/export \
-    /acme/home \
-    /var/log/cron \
-    /var/run/crond && \
-    chmod 666 /etc/passwd && \
-    chmod 777 /var/run/crond
+    /acme/home/.cache \
+    /acme/home/.ssh-runtime \
+    /var/log/cron && \
+    chmod 666 /etc/passwd
 
 # -------------------------
 # Copy scripts

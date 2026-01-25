@@ -9,7 +9,8 @@ RELOAD_CMD="$4"
 SRC="/acme/export/${DOMAIN}"
 
 # SSH options for non-interactive use
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10"
+# Use separate writable location for known_hosts since .ssh may be read-only
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=/acme/home/.ssh-runtime/known_hosts"
 
 echo "Deploying $DOMAIN to $HOST_URL:$DEST"
 
