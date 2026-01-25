@@ -101,12 +101,15 @@ while [ "$i" -lt "$domain_count" ]; do
   echo "  -> issuing/renewing certificate"
 
   if [ -n "$dns_provider" ]; then
-    if ! acme.sh --issue \
+    issue_result=0
+    acme.sh --issue \
       --server letsencrypt \
       --dns "dns_${dns_provider}" \
       -d "$domain" \
-      --keylength "$keylength"; then
-      echo "  -> WARNING: certificate issuance failed for $domain, will retry on next run"
+      --keylength "$keylength" || issue_result=$?
+    # acme.sh returns 0=success, 2=skip (not due), other=error
+    if [ "$issue_result" -ne 0 ] && [ "$issue_result" -ne 2 ]; then
+      echo "  -> WARNING: certificate issuance failed for $domain (exit $issue_result), will retry on next run"
       i=$((i + 1))
       continue
     fi
