@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-CONFIG=/acme/config/domains.yml
+CONFIG=/acme/config/settings.yml
 ACME_HOME=/acme/state
 
 die() {

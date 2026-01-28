@@ -14,7 +14,7 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 ## Quick Start
 
 1. Create a `.env` file with your configuration
-2. Create `domains.yml` in your config directory
+2. Create `settings.yml` in your config directory
 3. Run `docker-compose up -d`
 4. Add the generated SSH public key to your target hosts
 
@@ -24,7 +24,7 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
    - Repository URL: https://github.com/dam-pav/acme-worker.git
    - Compose path: docker-compose.yml
 2. Add Environment variables per requirements
-3. Create `domains.yml` in your config directory
+3. Create `settings.yml` in your config directory
 4. Add the generated SSH public key to your target hosts
 
 If you later find you need to make your own modifications to the compose file, you can simply Detach from Git anytime.
@@ -76,7 +76,7 @@ After first run, the following directories are created under `${DATA_DIR}/acme/`
 
 ```
 acme/
-├── config/          # domains.yml configuration
+├── config/          # settings.yml configuration
 ├── state/           # acme.sh state and certificates
 ├── export/          # Exported certificates (key.pem, cert.pem)
 ├── ssh/             # SSH keys (auto-generated)
@@ -87,9 +87,9 @@ acme/
 └── logs/            # Cron logs
 ```
 
-## domains.yml Configuration
+## settings.yml Configuration
 
-Place your `domains.yml` in `${DATA_DIR}/acme/config/`. See `config/domains.yml.example` for reference.
+Place your `settings.yml` in `${DATA_DIR}/acme/config/`. See `config/settings.yml.example` for reference.
 
 ### Structure
 
@@ -229,11 +229,11 @@ docker exec acme-worker /acme/bin/sync-certs.sh
 
 - Ensure the public key is in the correct file on the target host
 - Check file permissions: `authorized_keys` must be `600`
-- Verify the user matches `host_url` in `domains.yml`
+- Verify the user matches `host_url` in `settings.yml`
 
 ### sftp-server Not Found
 
-Use `transfer: scp` in `domains.yml` for minimal systems without sftp-server.
+Use `transfer: scp` in `settings.yml` for minimal systems without sftp-server.
 
 ### Certificate Not Renewing
 
@@ -250,8 +250,8 @@ Check logs for errors:
 docker logs acme-worker
 ```
 
-Common issues:
-- Missing `domains.yml`
+- Common issues:
+- Missing `settings.yml`
 - Invalid YAML syntax
 - Missing required fields
 

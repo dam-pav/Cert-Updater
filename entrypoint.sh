@@ -10,8 +10,8 @@ if ! whoami >/dev/null 2>&1; then
 fi
 
 # Sanity check
-if [ ! -f /acme/config/domains.yml ]; then
-  echo "[acme-worker] ERROR: /acme/config/domains.yml not found"
+if [ ! -f /acme/config/settings.yml ]; then
+  echo "[acme-worker] ERROR: /acme/config/settings.yml not found"
   exit 1
 fi
 

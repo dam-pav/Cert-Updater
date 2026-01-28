@@ -1,3 +1,4 @@
+```yaml
 # Host definitions - referenced by domains
 hosts:
   router:
@@ -30,3 +31,5 @@ domains:
         CF_Account_ID: ${CF_ACCOUNT_ID}
     host: vps               # reference to hosts.vps
     dest: /etc/nginx/certs/site
+
+```
