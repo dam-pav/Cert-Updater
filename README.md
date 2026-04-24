@@ -9,7 +9,7 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 - **Remote deployment** via SSH (scp or rsync)
 - **Multiple domains** configured via a single YAML file
 - **Non-root container** execution with configurable UID/GID
-- **Cron-based scheduling** for automatic renewals
+- **In-container sync loop** for automatic renewals with direct container logs
 
 ## Quick Start
 
@@ -57,6 +57,7 @@ If you later find you need to make your own modifications to the compose file, y
 | Variable | Description |
 |----------|-------------|
 | `ACME_ACCOUNT_EMAIL` | Email for Let's Encrypt notifications (expiry warnings) |
+| `SYNC_INTERVAL_SECONDS` | Delay between sync attempts after startup (default: `86400`) |
 | `TZ` | Timezone (default: `UTC`) |
 
 ### Example `.env`
@@ -66,6 +67,7 @@ DATA_DIR=/opt/docker-data
 ACME_UID=1000
 ACME_GID=1000
 ACME_ACCOUNT_EMAIL=admin@example.com
+SYNC_INTERVAL_SECONDS=86400
 CF_API_TOKEN=your-cloudflare-api-token
 CF_ACCOUNT_ID=your-cloudflare-account-id
 ```
@@ -83,8 +85,6 @@ acme/
 ├── ssh-runtime/     # Runtime SSH data (known_hosts per host)
 │   ├── router/      # known_hosts for 'router' host
 │   └── vps/         # known_hosts for 'vps' host
-├── crontabs/        # Cron schedule (editable)
-└── logs/            # Cron logs
 ```
 
 ## settings.yml Configuration
@@ -198,22 +198,23 @@ ssh -i ${DATA_DIR}/acme/ssh/id_ed25519 user@target-host "echo success"
 ```
 A successful deployment WILL NOT ask for password.
 
-## Cron Schedule
+## Sync Schedule
 
-By default, certificates are renewed on the 1st of each month at 3:00 AM. 
+The worker performs one sync immediately on startup, then keeps running a lightweight shell loop inside the container.
 
-To modify the schedule, edit:
+By default, the loop waits `86400` seconds (24 hours) between sync attempts. acme.sh still decides whether a certificate is actually due for renewal, so non-due certificates are skipped safely.
+
+To change the interval, set `SYNC_INTERVAL_SECONDS` in your `.env`:
+
+```
+SYNC_INTERVAL_SECONDS=86400
+```
+
+Restart the worker after changing the interval. Sync activity is written directly to the container logs:
+
 ```bash
-${DATA_DIR}/acme/crontabs/acme
+docker logs -f acme-worker
 ```
-
-The file uses standard cron format:
-```
-# minute hour day month weekday command
-0 3 1 * * /acme/bin/sync-certs.sh >> /var/log/cron/acme.log 2>&1
-```
-
-Changes take effect after container restart.
 
 ## Manual Sync
 

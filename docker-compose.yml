@@ -5,6 +5,7 @@
 # ACME_UID
 # ACME_GID
 # ACME_ACCOUNT_EMAIL
+# SYNC_INTERVAL_SECONDS
 
 version: "3.9"
 
@@ -46,9 +47,7 @@ services:
           "$$acme_base/config" \
           "$$acme_base/ssh" \
           "$$acme_base/ssh-runtime" \
-          "$$acme_base/export" \
-          "$$acme_base/logs" \
-          "$$acme_base/crontabs" || true
+          "$$acme_base/export" || true
         echo "Adjusting ownership and permissions"
         chown -R ${ACME_UID}:${ACME_GID} "$$acme_base" || true
         chmod 700 "$$acme_base/ssh" || true
@@ -89,11 +88,10 @@ services:
       - ${DATA_DIR}/acme/export:/acme/export
       - ${DATA_DIR}/acme/ssh:/acme/home/.ssh:ro
       - ${DATA_DIR}/acme/ssh-runtime:/acme/home/.ssh-runtime
-      - ${DATA_DIR}/acme/logs:/var/log/cron
-      - ${DATA_DIR}/acme/crontabs:/acme/crontabs
 
     environment:
       TZ: Europe/Ljubljana
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-86400}
       ACME_ACCOUNT_EMAIL: ${ACME_ACCOUNT_EMAIL:-}
       CF_API_TOKEN: ${CF_API_TOKEN:-}
       CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}

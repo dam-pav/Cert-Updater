@@ -32,9 +32,7 @@ RUN mkdir -p \
     /acme/config \
     /acme/export \
     /acme/home/.cache \
-    /acme/home/.ssh-runtime \
-    /acme/crontabs \
-    /var/log/cron && \
+    /acme/home/.ssh-runtime && \
     chmod 666 /etc/passwd
 
 # -------------------------
