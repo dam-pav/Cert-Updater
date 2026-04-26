@@ -57,7 +57,7 @@ If you later find you need to make your own modifications to the compose file, y
 | Variable | Description |
 |----------|-------------|
 | `ACME_ACCOUNT_EMAIL` | Email for Let's Encrypt notifications (expiry warnings) |
-| `SYNC_INTERVAL_SECONDS` | Delay between sync attempts after startup (default: `86400`) |
+| `SYNC_INTERVAL_SECONDS` | Fallback delay between sync attempts when ACME renewal metadata is unavailable (default: `86400`) |
 | `TZ` | Timezone (default: `UTC`) |
 
 ### Example `.env`
@@ -202,9 +202,9 @@ A successful deployment WILL NOT ask for password.
 
 The worker performs one sync immediately on startup, then keeps running a lightweight shell loop inside the container.
 
-By default, the loop waits `86400` seconds (24 hours) between sync attempts. acme.sh still decides whether a certificate is actually due for renewal, so non-due certificates are skipped safely.
+After each sync, the loop reads acme.sh renewal metadata for every configured domain and sleeps until the earliest reported renewal time. acme.sh still decides whether a certificate is actually due for renewal, so non-due certificates are skipped safely.
 
-To change the interval, set `SYNC_INTERVAL_SECONDS` in your `.env`:
+If renewal metadata is not available yet, the worker falls back to `SYNC_INTERVAL_SECONDS`. To change that fallback, set it in your `.env`:
 
 ```
 SYNC_INTERVAL_SECONDS=86400
