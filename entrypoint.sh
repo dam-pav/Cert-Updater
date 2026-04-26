@@ -16,6 +16,18 @@ validate_interval() {
   esac
 }
 
+format_duration() {
+  total_seconds=$1
+  days=$((total_seconds / 86400))
+  remainder=$((total_seconds % 86400))
+  hours=$((remainder / 3600))
+  remainder=$((remainder % 3600))
+  minutes=$((remainder / 60))
+  seconds=$((remainder % 60))
+
+  echo "${days}d ${hours}h ${minutes}m ${seconds}s"
+}
+
 get_acme_next_renewal_time() {
   domain=$1
 
@@ -131,7 +143,7 @@ while [ "$stop_requested" -eq 0 ]; do
   if [ "$sync_result" -eq 0 ]; then
     log "Scheduled sync completed"
   else
-    log "Scheduled sync failed, will retry after ${SYNC_INTERVAL_SECONDS}s"
+    log "Scheduled sync failed, will retry after $(format_duration "$SYNC_INTERVAL_SECONDS")"
   fi
 done
 
