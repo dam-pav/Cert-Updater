@@ -118,10 +118,10 @@ log "Running initial certificate sync"
 
 log "Initial sync complete"
 refresh_sync_interval "$FALLBACK_SYNC_INTERVAL_SECONDS"
-log "Starting internal sync loop (interval: ${SYNC_INTERVAL_SECONDS}s)"
+log "Starting internal sync loop (fallback interval: $(format_duration "$SYNC_INTERVAL_SECONDS"))"
 
 while [ "$stop_requested" -eq 0 ]; do
-  log "Sleeping for ${SYNC_INTERVAL_SECONDS}s before next sync"
+  log "Sleeping for $(format_duration "$SYNC_INTERVAL_SECONDS") before next sync"
   sleep "$SYNC_INTERVAL_SECONDS" &
   sleep_pid=$!
 
