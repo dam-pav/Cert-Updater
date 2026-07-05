@@ -20,29 +20,35 @@ RUN curl -s https://get.acme.sh | sh && \
     ln -s /root/.acme.sh/acme.sh /usr/local/bin/acme.sh && \
     chmod a+x /root
 
-ENV LE_CONFIG_HOME="/acme/state"
+ENV LE_CONFIG_HOME="/cert-updater/state"
 
 # -------------------------
 # Filesystem layout
 # -------------------------
-ENV HOME=/acme/home
+ENV HOME=/cert-updater/home
 
 RUN mkdir -p \
-    /acme/bin \
-    /acme/config \
-    /acme/export \
-    /acme/home/.cache \
-    /acme/home/.ssh-runtime && \
+    /cert-updater/bin \
+    /cert-updater/config \
+    /cert-updater/export \
+    /cert-updater/home/.cache \
+    /cert-updater/home/.ssh-runtime && \
     chmod 666 /etc/passwd
 
 # -------------------------
 # Copy scripts
 # -------------------------
-COPY bin/sync-certs.sh /acme/bin/sync-certs.sh
-COPY bin/deploy.sh     /acme/bin/deploy.sh
+COPY bin/sync-certs.sh /cert-updater/bin/sync-certs.sh
+COPY bin/deploy.sh     /cert-updater/bin/deploy.sh
+COPY bin/update-status.sh /cert-updater/bin/update-status.sh
 COPY entrypoint.sh    /entrypoint.sh
 
-RUN chmod +x /acme/bin/*.sh /entrypoint.sh
+RUN chmod +x /cert-updater/bin/*.sh /entrypoint.sh
+
+# -------------------------
+# Web dashboard
+# -------------------------
+COPY web/ /cert-updater/web/
 
 # -------------------------
 # Entrypoint

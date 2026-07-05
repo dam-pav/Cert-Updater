@@ -8,14 +8,14 @@ DEST="$4"
 RELOAD_CMD="$5"
 TRANSFER="${6:-scp}"  # default to scp
 
-SRC="/acme/export/${DOMAIN}"
+SRC="/cert-updater/export/${DOMAIN}"
 
 # Create host-specific directory for known_hosts
-mkdir -p "/acme/home/.ssh-runtime/${HOST_NAME}"
+mkdir -p "/cert-updater/home/.ssh-runtime/${HOST_NAME}"
 
 # SSH options for non-interactive use
 # Use host-specific known_hosts file
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=/acme/home/.ssh-runtime/${HOST_NAME}/known_hosts"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=/cert-updater/home/.ssh-runtime/${HOST_NAME}/known_hosts"
 
 echo "Deploying $DOMAIN to $HOST_NAME ($HOST_URL:$DEST) via $TRANSFER"
 

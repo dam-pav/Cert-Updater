@@ -6,6 +6,7 @@
 # CERT_GID
 # ACME_ACCOUNT_EMAIL
 # SYNC_INTERVAL_SECONDS
+# WEB_PORT (default: 8080)
 
 version: "3.9"
 
@@ -26,7 +27,7 @@ services:
         # Install openssh for ssh-keygen
         apk add --no-cache openssh-keygen
 
-        acme_base="/data/acme"
+        cert_base="/data/cert-updater"
 
         echo "Checking /data mount..."
         if [ ! -d "/data" ]; then
@@ -34,37 +35,37 @@ services:
           exit 1
         fi
 
-        echo "Using base directory: $$acme_base"
-        if [ -z "$$acme_base" ]; then
-          echo "ERROR: ACME base is empty"
+        echo "Using base directory: $$cert_base"
+        if [ -z "$$cert_base" ]; then
+          echo "ERROR: Cert base is empty"
           exit 1
         fi
 
-        echo "Creating ACME directories under $$acme_base"
-        mkdir -p "$$acme_base" || true
+        echo "Creating directories under $$cert_base"
+        mkdir -p "$$cert_base" || true
         mkdir -p \
-          "$$acme_base/state" \
-          "$$acme_base/config" \
-          "$$acme_base/ssh" \
-          "$$acme_base/ssh-runtime" \
-          "$$acme_base/export" || true
+          "$$cert_base/state" \
+          "$$cert_base/config" \
+          "$$cert_base/ssh" \
+          "$$cert_base/ssh-runtime" \
+          "$$cert_base/export" || true
         echo "Adjusting ownership and permissions"
-        chown -R ${CERT_UID}:${CERT_GID} "$$acme_base" || true
-        chmod 700 "$$acme_base/ssh" || true
+        chown -R ${CERT_UID}:${CERT_GID} "$$cert_base" || true
+        chmod 700 "$$cert_base/ssh" || true
 
         # Generate SSH key if it does not exist
-        if [ ! -f "$$acme_base/ssh/id_ed25519" ]; then
+        if [ ! -f "$$cert_base/ssh/id_ed25519" ]; then
           echo "Generating SSH key..."
-          ssh-keygen -t ed25519 -f "$$acme_base/ssh/id_ed25519" -N "" -C "cert-updater"
-          chown ${CERT_UID}:${CERT_GID} "$$acme_base/ssh/id_ed25519" "$$acme_base/ssh/id_ed25519.pub"
-          chmod 600 "$$acme_base/ssh/id_ed25519"
-          chmod 644 "$$acme_base/ssh/id_ed25519.pub"
+          ssh-keygen -t ed25519 -f "$$cert_base/ssh/id_ed25519" -N "" -C "cert-updater"
+          chown ${CERT_UID}:${CERT_GID} "$$cert_base/ssh/id_ed25519" "$$cert_base/ssh/id_ed25519.pub"
+          chmod 600 "$$cert_base/ssh/id_ed25519"
+          chmod 644 "$$cert_base/ssh/id_ed25519.pub"
           echo ""
           echo "=========================================="
           echo "NEW SSH KEY GENERATED"
           echo "Add this public key to your target hosts:"
           echo "=========================================="
-          cat "$$acme_base/ssh/id_ed25519.pub"
+          cat "$$cert_base/ssh/id_ed25519.pub"
           echo "=========================================="
           echo ""
         fi
@@ -83,11 +84,11 @@ services:
         condition: service_completed_successfully
 
     volumes:
-      - ${DATA_DIR}/acme/state:/acme/state
-      - ${DATA_DIR}/acme/config:/acme/config
-      - ${DATA_DIR}/acme/export:/acme/export
-      - ${DATA_DIR}/acme/ssh:/acme/home/.ssh:ro
-      - ${DATA_DIR}/acme/ssh-runtime:/acme/home/.ssh-runtime
+      - ${DATA_DIR}/cert-updater/state:/cert-updater/state
+      - ${DATA_DIR}/cert-updater/config:/cert-updater/config
+      - ${DATA_DIR}/cert-updater/export:/cert-updater/export
+      - ${DATA_DIR}/cert-updater/ssh:/cert-updater/home/.ssh:ro
+      - ${DATA_DIR}/cert-updater/ssh-runtime:/cert-updater/home/.ssh-runtime
 
     environment:
       TZ: Europe/Ljubljana
@@ -96,3 +97,15 @@ services:
       CF_API_TOKEN: ${CF_API_TOKEN:-}
       CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
       DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:-}
+
+  cert-updater-web:
+    image: nginx:alpine
+    container_name: cert-updater-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      - ${DATA_DIR}/cert-updater/export:/usr/share/nginx/html:ro
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - cert-updater

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Status Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.15);
+            --border: #475569;
+            --status-valid: #22c55e;
+            --status-expired: #ef4444;
+            --status-unknown: #f59e0b;
+            --radius: 12px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .last-sync {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-secondary);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.75rem;
+            border: 1px solid var(--border);
+        }
+
+        .last-sync .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 0.35rem;
+        }
+
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card.valid .number { color: var(--status-valid); }
+        .stat-card.expired .number { color: var(--status-expired); }
+        .stat-card.unknown .number { color: var(--status-unknown); }
+
+        .table-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: var(--bg-card);
+        }
+
+        th {
+            padding: 1rem 1.25rem;
+            text-align: left;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 1rem 1.25rem;
+            font-size: 0.9rem;
+            border-bottom: 1px solid rgba(71, 85, 105, 0.4);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr {
+            transition: background 0.15s;
+        }
+
+        tbody tr:hover {
+            background: rgba(56, 189, 248, 0.04);
+        }
+
+        .domain-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .host-tag {
+            display: inline-block;
+            background: var(--accent-glow);
+            color: var(--accent);
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .provider-badge {
+            display: inline-block;
+            background: rgba(167, 139, 250, 0.15);
+            color: #a78bfa;
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .status-badge.valid {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--status-valid);
+        }
+
+        .status-badge.expired {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--status-expired);
+        }
+
+        .status-badge.unknown {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--status-unknown);
+        }
+
+        .status-badge .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        .status-badge.valid .status-dot { background: var(--status-valid); }
+        .status-badge.expired .status-dot { background: var(--status-expired); }
+        .status-badge.unknown .status-dot { background: var(--status-unknown); }
+
+        .datetime {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-msg {
+            text-align: center;
+            padding: 2rem;
+            color: var(--status-expired);
+            background: rgba(239, 68, 68, 0.08);
+            border-radius: var(--radius);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.4;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: var(--bg-primary);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(56, 189, 248, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 24px rgba(56, 189, 248, 0.4);
+        }
+
+        .refresh-btn svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            th, td { padding: 0.75rem 0.75rem; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            table { font-size: 0.85rem; }
+        }
+
+        @media (max-width: 500px) {
+            .hide-mobile { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 Certificate Status Dashboard</h1>
+            <p>SSL/TLS certificate monitoring for all configured domains</p>
+            <div class="last-sync" id="lastSync">
+                <span class="dot"></span>
+                <span>Loading...</span>
+            </div>
+        </header>
+
+        <div class="stats" id="stats"></div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Domain</th>
+                        <th>Host</th>
+                        <th class="hide-mobile">Provider</th>
+                        <th>Status</th>
+                        <th class="hide-mobile">Last Checked</th>
+                        <th>Last Updated</th>
+                        <th>Next Update</th>
+                    </tr>
+                </thead>
+                <tbody id="domainTable">
+                    <tr>
+                        <td colspan="7">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                                Loading certificate status...
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadStatus()" title="Refresh">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path d="M4 4v5h5M20 20v-5h-5"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L4 4"/>
+            <path d="M3.51 15a9 9 0 0 0 14.85 3.36L20 20"/>
+        </svg>
+    </button>
+
+    <script>
+        function formatDateTime(timestamp) {
+            if (!timestamp) return '—';
+            const d = new Date(timestamp + 'Z');
+            if (isNaN(d)) return timestamp;
+            return d.toLocaleString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false, timeZone: 'UTC'
+            }) + ' UTC';
+        }
+
+        function updateStats(domains) {
+            const stats = { total: domains.length, valid: 0, expired: 0, unknown: 0 };
+            domains.forEach(d => { stats[d.status] = (stats[d.status] || 0) + 1; });
+
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card"><div class="number">${stats.total}</div><div class="label">Total</div></div>
+                <div class="stat-card valid"><div class="number">${stats.valid}</div><div class="label">Valid</div></div>
+                <div class="stat-card expired"><div class="number">${stats.expired}</div><div class="label">Expired</div></div>
+                <div class="stat-card unknown"><div class="number">${stats.unknown}</div><div class="label">Unknown</div></div>
+            `;
+        }
+
+        function renderTable(domains) {
+            const tbody = document.getElementById('domainTable');
+
+            if (!domains.length) {
+                tbody.innerHTML = `
+                    <tr><td colspan="7">
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 5.25h9a2.25 2.25 0 0 0 2.25-2.25V8.25a2.25 2.25 0 0 0-2.25-2.25h-9a2.25 2.25 0 0 0-2.25 2.25v5.25a2.25 2.25 0 0 0 2.25 2.25Z"/>
+                            </svg>
+                            <p>No domains configured</p>
+                        </div>
+                    </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = domains.map(d => `
+                <tr>
+                    <td class="domain-name">${d.name}</td>
+                    <td><span class="host-tag">${d.host || '—'}</span></td>
+                    <td class="hide-mobile"><span class="provider-badge">${d.provider || '—'}</span></td>
+                    <td><span class="status-badge ${d.status}"><span class="status-dot"></span>${d.status}</span></td>
+                    <td class="datetime hide-mobile">${formatDateTime(d.last_checked)}</td>
+                    <td class="datetime">${formatDateTime(d.last_updated)}</td>
+                    <td class="datetime">${formatDateTime(d.next_update)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadStatus() {
+            const btn = document.querySelector('.refresh-btn svg');
+            btn.style.animation = 'spin 0.8s linear infinite';
+
+            try {
+                const res = await fetch('status.json?t=' + Date.now());
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                const syncEl = document.getElementById('lastSync');
+                syncEl.innerHTML = `<span class="dot"></span><span>Last sync: ${formatDateTime(data.last_sync)}</span>`;
+
+                updateStats(data.domains);
+                renderTable(data.domains);
+            } catch (err) {
+                document.getElementById('domainTable').innerHTML = `
+                    <tr><td colspan="7"><div class="error-msg">Failed to load status: ${err.message}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
+                document.getElementById('stats').innerHTML = '';
+            } finally {
+                btn.style.animation = '';
+            }
+        }
+
+        loadStatus();
+        setInterval(loadStatus, 60000);
+    </script>
+</body>
+</html>

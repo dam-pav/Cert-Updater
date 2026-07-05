@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-CONFIG=/acme/config/settings.yml
-ACME_HOME=/acme/state
+CONFIG=/cert-updater/config/settings.yml
+ACME_HOME=/cert-updater/state
 
 die() {
   echo "ERROR: $1" >&2
@@ -91,7 +91,7 @@ while [ "$i" -lt "$domain_count" ]; do
   require_value "$host_dest" "Domain $domain: dest is required."
 
   cert_dir="${ACME_HOME}/${domain}_ecc"
-  export_dir="/acme/export/${domain}"
+  export_dir="/cert-updater/export/${domain}"
 
   env_keys=$(yq e "$domain_path | (.dns // {}) | .env // {} | keys | .[]" "$CONFIG")
   if [ -n "$dns_provider" ]; then
@@ -140,13 +140,13 @@ while [ "$i" -lt "$domain_count" ]; do
 
   echo "  -> installing deploy hook"
 
-  mkdir -p "/acme/export/${domain}"
+  mkdir -p "/cert-updater/export/${domain}"
 
   if ! acme.sh --install-cert -d "$domain" \
     --ecc \
-    --key-file       "/acme/export/${domain}/key.pem" \
-    --fullchain-file "/acme/export/${domain}/cert.pem" \
-    --reloadcmd      "/acme/bin/deploy.sh \
+    --key-file       "/cert-updater/export/${domain}/key.pem" \
+    --fullchain-file "/cert-updater/export/${domain}/cert.pem" \
+    --reloadcmd      "/cert-updater/bin/deploy.sh \
                       $domain \
                       $host_name \
                       $host_url \
@@ -158,3 +158,7 @@ while [ "$i" -lt "$domain_count" ]; do
 
   i=$((i + 1))
 done
+
+# Update status.json
+echo "==> Updating certificate status"
+/cert-updater/bin/update-status.sh

@@ -10,6 +10,7 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 - **Multiple domains** configured via a single YAML file
 - **Non-root container** execution with configurable UID/GID
 - **In-container sync loop** for automatic renewals with direct container logs
+- **Web dashboard** for real-time certificate status monitoring
 
 ## Quick Start
 
@@ -17,6 +18,26 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 2. Create `settings.yml` in your config directory
 3. Run `docker-compose up -d`
 4. Add the generated SSH public key to your target hosts
+
+## Web Dashboard
+
+A built-in dashboard provides a real-time overview of all certificate statuses. Access it at:
+
+```
+http://localhost:8080
+```
+
+The dashboard displays:
+- **Summary cards**: Total, valid, expired, and unknown certificates
+- **Domain table**: Domain name, target host, DNS provider, status, last checked, last updated, and next renewal date
+- **Auto-refresh**: Updates every 60 seconds
+- **Manual refresh**: Click the floating refresh button
+
+Customize the port with the `WEB_PORT` environment variable:
+
+```
+WEB_PORT=80
+```
 
 ## Portainer
 
@@ -58,6 +79,7 @@ If you later find you need to make your own modifications to the compose file, y
 |----------|-------------|
 | `ACME_ACCOUNT_EMAIL` | Email for Let's Encrypt notifications (expiry warnings) |
 | `SYNC_INTERVAL_SECONDS` | Fallback delay between sync attempts when ACME renewal metadata is unavailable (default: `86400`) |
+| `WEB_PORT` | Port for the web dashboard (default: `8080`) |
 | `TZ` | Timezone (default: `UTC`) |
 
 ### Example `.env`
@@ -74,10 +96,10 @@ CF_ACCOUNT_ID=your-cloudflare-account-id
 
 ## Directory Structure
 
-After first run, the following directories are created under `${DATA_DIR}/acme/`:
+After first run, the following directories are created under `${DATA_DIR}/cert-updater/`:
 
 ```
-acme/
+cert-updater/
 ├── config/          # settings.yml configuration
 ├── state/           # acme.sh state and certificates
 ├── export/          # Exported certificates (key.pem, cert.pem)
@@ -89,7 +111,7 @@ acme/
 
 ## settings.yml Configuration
 
-Place your `settings.yml` in `${DATA_DIR}/acme/config/`. See `config/settings.yml.example` for reference.
+Place your `settings.yml` in `${DATA_DIR}/cert-updater/config/`. See `config/settings.yml.example` for reference.
 
 ### Structure
 
@@ -154,7 +176,7 @@ The init container automatically generates an SSH key pair on first run. You nee
 After first run, view the generated public key:
 
 ```bash
-cat ${DATA_DIR}/acme/ssh/id_ed25519.pub
+cat ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ```
 
 Or check the `cert-updater-init` container logs:
@@ -169,23 +191,23 @@ docker logs cert-updater-init
 
 ```bash
 # Copy key to target
-ssh-copy-id -i ${DATA_DIR}/acme/ssh/id_ed25519.pub user@target-host
+ssh-copy-id -i ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub user@target-host
 
 # Or manually
-ssh user@target-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA_DIR}/acme/ssh/id_ed25519.pub
+ssh user@target-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ```
 
 #### OpenWrt / ASUS-WRT Merlin (Dropbear)
 
 For the root user (UID 0):
 ```bash
-ssh root@router "cat >> /etc/dropbear/authorized_keys" < ${DATA_DIR}/acme/ssh/id_ed25519.pub
+ssh root@router "cat >> /etc/dropbear/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ssh root@router "chmod 600 /etc/dropbear/authorized_keys"
 ```
 
 For non-root users:
 ```bash
-ssh user@router "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA_DIR}/acme/ssh/id_ed25519.pub
+ssh user@router "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ssh user@router "chmod 600 ~/.ssh/authorized_keys"
 ```
 
@@ -194,7 +216,7 @@ ssh user@router "chmod 600 ~/.ssh/authorized_keys"
 ### 3. Test Connection
 
 ```bash
-ssh -i ${DATA_DIR}/acme/ssh/id_ed25519 user@target-host "echo success"
+ssh -i ${DATA_DIR}/cert-updater/ssh/id_ed25519 user@target-host "echo success"
 ```
 A successful deployment WILL NOT ask for password.
 
@@ -221,7 +243,7 @@ docker logs -f cert-updater
 To manually trigger certificate sync:
 
 ```bash
-docker exec cert-updater /acme/bin/sync-certs.sh
+docker exec cert-updater /cert-updater/bin/sync-certs.sh
 ```
 
 ## Troubleshooting

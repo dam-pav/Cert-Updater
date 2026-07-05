@@ -31,7 +31,7 @@ format_duration() {
 get_acme_next_renewal_time() {
   domain=$1
 
-  for conf in "/acme/state/${domain}_ecc/${domain}.conf" "/acme/state/${domain}/${domain}.conf"; do
+  for conf in "/cert-updater/state/${domain}_ecc/${domain}.conf" "/cert-updater/state/${domain}/${domain}.conf"; do
     if [ -r "$conf" ]; then
       next_renewal=$(sed -n "s/^Le_NextRenewTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$conf" | head -n 1)
       if [ -n "$next_renewal" ]; then
@@ -48,11 +48,11 @@ refresh_sync_interval() {
   fallback_interval=$1
   earliest_renewal=
   now=$(date -u +%s)
-  domain_count=$(yq e '.domains // [] | length' /acme/config/settings.yml)
+  domain_count=$(yq e '.domains // [] | length' /cert-updater/config/settings.yml)
 
   i=0
   while [ "$i" -lt "$domain_count" ]; do
-    domain=$(yq e ".domains[$i].name // \"\"" /acme/config/settings.yml)
+    domain=$(yq e ".domains[$i].name // \"\"" /cert-updater/config/settings.yml)
     if [ -n "$domain" ]; then
       next_renewal=$(get_acme_next_renewal_time "$domain")
       if validate_interval "$next_renewal"; then
@@ -103,18 +103,18 @@ log "Container started"
 
 # Create passwd entry for current UID if missing (required for SSH)
 if ! whoami >/dev/null 2>&1; then
-  echo "acme:x:$(id -u):$(id -g):acme:/acme/home:/bin/sh" >> /etc/passwd
+  echo "cert-updater:x:$(id -u):$(id -g):cert-updater:/cert-updater/home:/bin/sh" >> /etc/passwd
   log "Created passwd entry for UID $(id -u)"
 fi
 
 # Sanity check
-if [ ! -f /acme/config/settings.yml ]; then
-  echo "[cert-updater] ERROR: /acme/config/settings.yml not found" >&2
+if [ ! -f /cert-updater/config/settings.yml ]; then
+  echo "[cert-updater] ERROR: /cert-updater/config/settings.yml not found" >&2
   exit 1
 fi
 
 log "Running initial certificate sync"
-/acme/bin/sync-certs.sh
+/cert-updater/bin/sync-certs.sh
 
 log "Initial sync complete"
 refresh_sync_interval "$FALLBACK_SYNC_INTERVAL_SECONDS"
@@ -132,7 +132,7 @@ while [ "$stop_requested" -eq 0 ]; do
   fi
 
   log "Running scheduled certificate sync"
-  if /acme/bin/sync-certs.sh; then
+  if /cert-updater/bin/sync-certs.sh; then
     sync_result=0
   else
     sync_result=$?
