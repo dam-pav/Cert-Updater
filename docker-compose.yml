@@ -10,9 +10,9 @@
 version: "3.9"
 
 services:
-  acme-init:
+  cert-updater-init:
     image: alpine:3.20
-    container_name: acme-init
+    container_name: cert-updater-init
     user: "0:0"
     restart: "no"
   
@@ -55,7 +55,7 @@ services:
         # Generate SSH key if it does not exist
         if [ ! -f "$$acme_base/ssh/id_ed25519" ]; then
           echo "Generating SSH key..."
-          ssh-keygen -t ed25519 -f "$$acme_base/ssh/id_ed25519" -N "" -C "acme-worker"
+          ssh-keygen -t ed25519 -f "$$acme_base/ssh/id_ed25519" -N "" -C "cert-updater"
           chown ${ACME_UID}:${ACME_GID} "$$acme_base/ssh/id_ed25519" "$$acme_base/ssh/id_ed25519.pub"
           chmod 600 "$$acme_base/ssh/id_ed25519"
           chmod 644 "$$acme_base/ssh/id_ed25519.pub"
@@ -72,14 +72,14 @@ services:
         echo "acme init completed successfully"
       '
 
-  acme-worker:
-    image: ghcr.io/dam-pav/acme-worker:latest
-    container_name: acme-worker
+  cert-updater:
+    image: ghcr.io/dam-pav/cert-updater:latest
+    container_name: cert-updater
     user: "${ACME_UID}:${ACME_GID}"
     restart: unless-stopped
 
     depends_on:
-      acme-init:
+      cert-updater-init:
         condition: service_completed_successfully
 
     volumes:

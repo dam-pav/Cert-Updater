@@ -1,4 +1,4 @@
-# ACME Worker
+# Cert Updater
 
 A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://github.com/acmesh-official/acme.sh) with Let's Encrypt. Automatically issues, renews, and deploys certificates to remote hosts via SSH.
 
@@ -21,7 +21,7 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 ## Portainer
 
 1. Create a new "Repository" stack with
-   - Repository URL: https://github.com/dam-pav/acme-worker.git
+   - Repository URL: https://github.com/dam-pav/cert-updater.git
    - Compose path: docker-compose.yml
 2. Add Environment variables per requirements
 3. Create `settings.yml` in your config directory
@@ -157,10 +157,10 @@ After first run, view the generated public key:
 cat ${DATA_DIR}/acme/ssh/id_ed25519.pub
 ```
 
-Or check the `acme-init` container logs:
+Or check the `cert-updater-init` container logs:
 
 ```bash
-docker logs acme-init
+docker logs cert-updater-init
 ```
 
 ### 2. Add to Target Host
@@ -213,7 +213,7 @@ SYNC_INTERVAL_SECONDS=86400
 Restart the worker after changing the interval. Sync activity is written directly to the container logs:
 
 ```bash
-docker logs -f acme-worker
+docker logs -f cert-updater
 ```
 
 ## Manual Sync
@@ -221,7 +221,7 @@ docker logs -f acme-worker
 To manually trigger certificate sync:
 
 ```bash
-docker exec acme-worker /acme/bin/sync-certs.sh
+docker exec cert-updater /acme/bin/sync-certs.sh
 ```
 
 ## Troubleshooting
@@ -241,14 +241,14 @@ Use `transfer: scp` in `settings.yml` for minimal systems without sftp-server.
 acme.sh skips renewal if the certificate is not due (>30 days remaining). This is normal behavior. Force renewal with:
 
 ```bash
-docker exec acme-worker acme.sh --renew -d example.com --force
+docker exec cert-updater acme.sh --renew -d example.com --force
 ```
 
 ### Container Keeps Restarting
 
 Check logs for errors:
 ```bash
-docker logs acme-worker
+docker logs cert-updater
 ```
 
 - Common issues:

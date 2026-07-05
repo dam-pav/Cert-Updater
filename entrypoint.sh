@@ -2,7 +2,7 @@
 set -e
 
 log() {
-  echo "[acme-worker] $(date -u +"%Y-%m-%dT%H:%M:%SZ") $*"
+  echo "[cert-updater] $(date -u +"%Y-%m-%dT%H:%M:%SZ") $*"
 }
 
 validate_interval() {
@@ -84,7 +84,7 @@ refresh_sync_interval() {
 SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-86400}
 
 if ! validate_interval "$SYNC_INTERVAL_SECONDS"; then
-  echo "[acme-worker] ERROR: SYNC_INTERVAL_SECONDS must be a positive integer, got '$SYNC_INTERVAL_SECONDS'" >&2
+      echo "[cert-updater] ERROR: SYNC_INTERVAL_SECONDS must be a positive integer, got '$SYNC_INTERVAL_SECONDS'" >&2
   exit 1
 fi
 
@@ -109,7 +109,7 @@ fi
 
 # Sanity check
 if [ ! -f /acme/config/settings.yml ]; then
-  echo "[acme-worker] ERROR: /acme/config/settings.yml not found" >&2
+  echo "[cert-updater] ERROR: /acme/config/settings.yml not found" >&2
   exit 1
 fi
 
