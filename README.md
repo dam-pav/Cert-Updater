@@ -36,8 +36,8 @@ If you later find you need to make your own modifications to the compose file, y
 | Variable | Description |
 |----------|-------------|
 | `DATA_DIR` | Base directory for persistent data (e.g., `/opt/docker-data`) |
-| `ACME_UID` | User ID for the worker container (e.g., `1000`) |
-| `ACME_GID` | Group ID for the worker container (e.g., `1000`) |
+| `CERT_UID` | User ID for the updater container (e.g., `1000`) |
+| `CERT_GID` | Group ID for the updater container (e.g., `1000`) |
 
 ### Required for Cloudflare provider
 
@@ -64,8 +64,8 @@ If you later find you need to make your own modifications to the compose file, y
 
 ```env
 DATA_DIR=/opt/docker-data
-ACME_UID=1000
-ACME_GID=1000
+CERT_UID=1000
+CERT_GID=1000
 ACME_ACCOUNT_EMAIL=admin@example.com
 SYNC_INTERVAL_SECONDS=86400
 CF_API_TOKEN=your-cloudflare-api-token

@@ -2,8 +2,8 @@
 # CF_API_TOKEN=yyyy
 # CF_ACCOUNT_ID=zzzz
 # DATA_DIR
-# ACME_UID
-# ACME_GID
+# CERT_UID
+# CERT_GID
 # ACME_ACCOUNT_EMAIL
 # SYNC_INTERVAL_SECONDS
 
@@ -49,14 +49,14 @@ services:
           "$$acme_base/ssh-runtime" \
           "$$acme_base/export" || true
         echo "Adjusting ownership and permissions"
-        chown -R ${ACME_UID}:${ACME_GID} "$$acme_base" || true
+        chown -R ${CERT_UID}:${CERT_GID} "$$acme_base" || true
         chmod 700 "$$acme_base/ssh" || true
 
         # Generate SSH key if it does not exist
         if [ ! -f "$$acme_base/ssh/id_ed25519" ]; then
           echo "Generating SSH key..."
           ssh-keygen -t ed25519 -f "$$acme_base/ssh/id_ed25519" -N "" -C "cert-updater"
-          chown ${ACME_UID}:${ACME_GID} "$$acme_base/ssh/id_ed25519" "$$acme_base/ssh/id_ed25519.pub"
+          chown ${CERT_UID}:${CERT_GID} "$$acme_base/ssh/id_ed25519" "$$acme_base/ssh/id_ed25519.pub"
           chmod 600 "$$acme_base/ssh/id_ed25519"
           chmod 644 "$$acme_base/ssh/id_ed25519.pub"
           echo ""
@@ -75,7 +75,7 @@ services:
   cert-updater:
     image: ghcr.io/dam-pav/cert-updater:latest
     container_name: cert-updater
-    user: "${ACME_UID}:${ACME_GID}"
+    user: "${CERT_UID}:${CERT_GID}"
     restart: unless-stopped
 
     depends_on:
