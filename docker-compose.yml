@@ -99,9 +99,7 @@ services:
       DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:-}
 
   cert-updater-web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
+    image: ghcr.io/dam-pav/cert-updater-web:latest
     container_name: cert-updater-web
     restart: unless-stopped
     ports:
