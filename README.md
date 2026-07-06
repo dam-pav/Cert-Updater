@@ -14,10 +14,28 @@ A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://git
 
 ## Quick Start
 
-1. Create a `.env` file with your configuration
-2. Create `settings.yml` in your config directory
-3. Run `docker-compose up -d`
-4. Add the generated SSH public key to your target hosts
+1. Create a `.env` file with your configuration:
+   ```env
+   DATA_DIR=/path/to/data
+   CERT_UID=1000
+   CERT_GID=1000
+   ```
+2. Start the init container (creates directories and SSH keys):
+   ```bash
+   docker compose up -d cert-updater-init
+   ```
+3. Copy `config/settings.yml.example` to your data directory and edit:
+   ```bash
+   mkdir -p ${DATA_DIR}/cert-updater/config
+   cp config/settings.yml.example ${DATA_DIR}/cert-updater/config/settings.yml
+   nano ${DATA_DIR}/cert-updater/config/settings.yml
+   ```
+4. Start the stack:
+   ```bash
+   docker compose up -d
+   ```
+   This pulls `ghcr.io/dam-pav/cert-updater:latest` for the main service and builds the web dashboard image automatically.
+5. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below)
 
 ## Web Dashboard
 
@@ -44,9 +62,13 @@ WEB_PORT=80
 1. Create a new "Repository" stack with
    - Repository URL: https://github.com/dam-pav/cert-updater.git
    - Compose path: docker-compose.yml
-2. Add Environment variables per requirements
-3. Create `settings.yml` in your config directory
-4. Add the generated SSH public key to your target hosts
+2. Add environment variables (at minimum: `DATA_DIR`, `CERT_UID`, `CERT_GID`)
+3. After deployment, create `settings.yml` at `${DATA_DIR}/cert-updater/config/settings.yml`
+4. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below)
+5. Restart the `cert-updater` service after adding the config:
+   ```bash
+   docker compose restart cert-updater
+   ```
 
 If you later find you need to make your own modifications to the compose file, you can simply Detach from Git anytime.
 
