@@ -59,18 +59,13 @@ WEB_PORT=80
 
 ## Portainer
 
-1. Build and push the web dashboard image first (requires Docker access):
-   ```bash
-   docker build -f Dockerfile.web -t ghcr.io/dam-pav/cert-updater-web:latest .
-   docker push ghcr.io/dam-pav/cert-updater-web:latest
-   ```
-2. Create a new "Repository" stack with
+1. Create a new "Repository" stack with
    - Repository URL: https://github.com/dam-pav/cert-updater.git
    - Compose path: docker-compose.yml
-3. Add environment variables (at minimum: `DATA_DIR`, `CERT_UID`, `CERT_GID`)
-4. After deployment, create `settings.yml` at `${DATA_DIR}/cert-updater/config/settings.yml`
-5. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below)
-6. Restart the `cert-updater` service after adding the config:
+2. Add environment variables (at minimum: `DATA_DIR`, `CERT_UID`, `CERT_GID`)
+3. After deployment, create `settings.yml` at `${DATA_DIR}/cert-updater/config/settings.yml`
+4. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below)
+5. Restart the `cert-updater` service after adding the config:
    ```bash
    docker compose restart cert-updater
    ```
