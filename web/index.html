@@ -493,6 +493,10 @@
             margin: 0;
         }
 
+        .editor-highlight span {
+            /* Only colored spans are visible; uncolored text stays transparent */
+        }
+
         .editor-textarea {
             position: relative;
             width: 100%;
@@ -504,6 +508,7 @@
             font-size: inherit;
             line-height: inherit;
             padding: 1rem;
+            margin: 0;
             resize: vertical;
             outline: none;
             white-space: pre-wrap;
@@ -516,8 +521,8 @@
         /* Syntax highlight colors */
         .hl-key-valid { color: #4ade80; }       /* green — valid schema key */
         .hl-val-valid { color: #86efac; }       /* light green — valid schema value */
-        .hl-key-invalid { color: #f87171; text-decoration: wavy underline #f87171; text-underline-offset: 3px; } /* red — invalid key */
-        .hl-val-invalid { color: #fca5a5; text-decoration: wavy underline #fca5a5; text-underline-offset: 3px; } /* red — invalid value */
+        .hl-key-invalid { color: #f87171; }    /* red — invalid key */
+        .hl-val-invalid { color: #fca5a5; }    /* red — invalid value */
         .hl-comment { color: #64748b; font-style: italic; } /* comments */
         .hl-string { color: #93c5fd; }           /* blue strings */
         .hl-anchor { color: #c084fc; }           /* purple YAML anchors/aliases */
@@ -525,6 +530,8 @@
         .hl-tag { color: #fbbf24; }              /* YAML tags */
         .hl-null { color: #f472b6; }             /* null values */
         .hl-bool { color: #fb923c; }             /* booleans */
+        .hl-colon { color: var(--text-secondary); } /* colon separator */
+        .hl-dash { color: var(--text-secondary); }  /* list dash */
 
         .validation-status {
             margin-top: 1rem;
@@ -935,29 +942,6 @@
     }
 
     // ── Syntax Highlighting ──
-    // Collect all valid top-level keys and their sub-keys from schema
-    function getValidKeys(schema) {
-        const valid = new Set();
-        if (schema.properties) {
-            for (const key of Object.keys(schema.properties)) {
-                valid.add(key);
-            }
-        }
-        return valid;
-    }
-
-    function getValidSubKeys(schema) {
-        const valid = new Map();
-        if (schema.properties) {
-            for (const [key, propSchema] of Object.entries(schema.properties)) {
-                if (propSchema.properties) {
-                    valid.set(key, new Set(Object.keys(propSchema.properties)));
-                }
-            }
-        }
-        return valid;
-    }
-
     // Build a set of all valid dotted paths from schema
     function getAllValidPaths(schema, prefix = '') {
         const validPaths = new Set();
@@ -965,21 +949,20 @@
         for (const [key, propSchema] of Object.entries(schema.properties)) {
             const path = prefix ? `${prefix}.${key}` : key;
             validPaths.add(path);
-            validPaths.add(key); // also the bare key
+            validPaths.add(key);
             validPaths.add(...getAllValidPaths(propSchema, path));
         }
         return validPaths;
     }
 
-    // Get the schema for a given dotted path
+    // Get the schema node for a given dotted path
     function getSchemaAtPath(schema, path) {
         const parts = path.split('.');
         let current = schema;
         for (const part of parts) {
             if (current.properties && current.properties[part]) {
                 current = current.properties[part];
-            } else if (current.additionalProperties && typeof current.additionalProperties === 'object' && !current.additionalProperties.type) {
-                // For hosts-style dynamic keys, return the additionalProperties schema
+            } else if (current.additionalProperties && typeof current.additionalProperties === 'object') {
                 current = current.additionalProperties;
             } else {
                 return null;
@@ -988,211 +971,105 @@
         return current;
     }
 
-    // Determine if a YAML key at a given nesting depth is valid per schema
-    function isKeyValid(dottedPath, parsedData) {
-        const validPaths = getAllValidPaths(SETTINGS_SCHEMA);
-        return validPaths.has(dottedPath);
-    }
-
     // Escape HTML for safe insertion
     function escapeHtml(str) {
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Tokenize and highlight a single line
-    function highlightLine(line, parsedData, lineIndex) {
-        // Comments
-        if (line.trimStart().startsWith('#')) {
-            return `<span class="hl-comment">${escapeHtml(line)}</span>`;
-        }
+    // Build a map of every YAML key → its parent path by scanning indentation
+    // Returns { lineIndex: { keyName: parentDottedPath } }
+    function buildKeyParentMap(lines, parsedData) {
+        const keyParents = new Map(); // lineIndex → { keyName: parentPath }
+        // Stack of { indent, path } for tracking context
+        const stack = []; // each entry: { indent, path }
 
-        // Empty line
-        if (line.trim() === '') {
-            return escapeHtml(line);
-        }
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.trim() === '' || line.trimStart().startsWith('#') || line.trimStart().startsWith('%')) continue;
 
-        // Determine indentation level
-        const indentMatch = line.match(/^(\s*)/);
-        const indent = indentMatch ? indentMatch[1] : '';
-        const content = line.slice(indent.length);
+            const indentLen = (line.match(/^(\s*)/)[1] || '').length;
+            const content = line.slice(indentLen).trim();
 
-        // YAML directives
-        if (content.startsWith('%')) {
-            return escapeHtml(line);
-        }
+            // Pop stack to find parent at shallower indent
+            while (stack.length > 0 && stack[stack.length - 1].indent >= indentLen) {
+                stack.pop();
+            }
 
-        // Build dotted path from indentation
-        // Count leading spaces and divide by 2 (our indent is 2 spaces)
-        const depth = Math.round(indent.length / 2);
+            const parentPath = stack.length > 0 ? stack[stack.length - 1].path : '';
 
-        // Check for key-value pair
-        const kvMatch = content.match(/^([^:\[#-][^:]*?):\s*(.*)/);
-        // Also match quoted keys
-        const quotedKvMatch = content.match(/^("(?:[^"\\]|\\.)*"):\s*(.*)/);
-        // Single-quoted keys
-        const sqKvMatch = content.match(/^'([^']*)':\s*(.*)/);
-
-        let result = escapeHtml(indent);
-
-        if (kvMatch || quotedKvMatch || sqKvMatch) {
-            const match = kvMatch || quotedKvMatch || sqKvMatch;
-            const keyRaw = (match[1] || '').trim();
-            const valRaw = (match[2] || '').trim();
-
-            // Reconstruct the key with original quoting
-            const keyMatch = content.match(/^((?:"[^"]*"|'[^']*'|[^:\[#-][^:]*)):\s*(.*)/);
+            // Try to extract key name
+            const keyMatch = content.match(/^((?:"[^"]*"|'[^']*'|[^:\[#\-/][^:]*)):\s*(.*)/);
             if (keyMatch) {
-                const keyStr = keyMatch[1];
-                const valStr = keyMatch[2].trim();
+                const keyRaw = keyMatch[1];
+                const keyClean = keyRaw.replace(/^["']|["']$/g, '');
+                const val = keyMatch[2].trim();
 
-                // Determine the dotted path for this key
-                // Build path from depth and parent keys
-                const keyClean = keyStr.replace(/^["']|["']$/g, ''); // strip quotes
+                // Determine this key's dotted path
+                const thisPath = parentPath ? `${parentPath}.${keyClean}` : keyClean;
 
-                // Check if this key is valid
-                let keyClass = 'hl-key-valid';
-                let valClass = 'hl-val-valid';
+                // Push onto stack
+                stack.push({ indent: indentLen, path: thisPath });
 
-                // Check if key exists in schema at this level
-                const validKeys = getValidKeys(SETTINGS_SCHEMA);
-                let keyIsValid = validKeys.has(keyClean);
-
-                // For deeper levels, check parent context
-                if (!keyIsValid && depth > 0) {
-                    // Try to find parent path
-                    const parentPath = buildParentPath(lineIndex, indent.length, parsedData);
-                    if (parentPath) {
-                        const parentSchema = getSchemaAtPath(SETTINGS_SCHEMA, parentPath);
-                        if (parentSchema && parentSchema.properties) {
-                            keyIsValid = parentSchema.properties.hasOwnProperty(keyClean);
-                        } else if (parentSchema && parentSchema.additionalProperties) {
-                            keyIsValid = true; // dynamic keys allowed
-                        }
-                    }
-                }
-
-                // For enum values, check if value is valid
-                let valIsValid = true;
-                if (keyIsValid && valStr) {
-                    const keySchema = findKeySchema(keyClean, lineIndex, parsedData);
-                    if (keySchema && keySchema.enum && !keySchema.enum.includes(valStr)) {
-                        valIsValid = false;
-                    }
-                }
-
-                if (!keyIsValid) {
-                    keyClass = 'hl-key-invalid';
-                }
-                if (!valIsValid) {
-                    valClass = 'hl-val-invalid';
-                }
-
-                result += `<span class="${keyClass}">${escapeHtml(keyStr)}</span>`;
-
-                result += '<span style="color: var(--text-secondary);">: </span>';
-
-                // Highlight value
-                if (valStr) {
-                    result += highlightValue(valStr, valIsValid);
-                }
-            } else {
-                result += `<span class="hl-key-valid">${escapeHtml(keyRaw)}</span>`;
-                result += '<span style="color: var(--text-secondary);">: </span>';
-                if (valRaw) {
-                    result += highlightValue(valRaw, true);
-                }
+                keyParents.set(i, { keyName: keyClean, keyRaw: keyRaw, parentPath: parentPath, thisPath: thisPath, value: val });
+            } else if (content.startsWith('- ')) {
+                // List item — parent is the array path
+                stack.push({ indent: indentLen + 2, path: parentPath });
             }
+        }
+
+        return keyParents;
+    }
+
+    // Check if a key is defined in the schema at its parent level
+    function isKeyInSchema(keyClean, parentPath) {
+        let parentSchema;
+        if (parentPath) {
+            parentSchema = getSchemaAtPath(SETTINGS_SCHEMA, parentPath);
         } else {
-            // List item or other
-            if (content.startsWith('- ')) {
-                result += '<span style="color: var(--text-secondary);">- </span>';
-                const rest = content.slice(2);
-                // Check if it's a key-value in a list item
-                const listKvMatch = rest.match(/^([^:\[#-][^:]*?):\s*(.*)/);
-                if (listKvMatch) {
-                    const listKeyMatch = rest.match(/^((?:"[^"]*"|'[^']*'|[^:\[#-][^:]*)):\s*(.*)/);
-                    if (listKeyMatch) {
-                        const lKey = listKeyMatch[1].replace(/^["']|["']$/g, '');
-                        const lVal = listKeyMatch[2].trim();
-                        // List items are typically domain entries — keys are generally valid
-                        result += `<span class="hl-key-valid">${escapeHtml(listKeyMatch[1])}</span>`;
-                        result += '<span style="color: var(--text-secondary);">: </span>';
-                        if (lVal) {
-                            result += highlightValue(lVal, true);
-                        }
-                    } else {
-                        result += highlightValue(rest, true);
-                    }
-                } else {
-                    result += highlightValue(rest, true);
-                }
-            } else {
-                result += escapeHtml(content);
+            parentSchema = SETTINGS_SCHEMA;
+        }
+
+        if (!parentSchema) return false;
+
+        // Check direct properties
+        if (parentSchema.properties && parentSchema.properties[keyClean]) {
+            return true;
+        }
+
+        // Check additionalProperties (for hosts section dynamic keys)
+        if (parentSchema.additionalProperties) {
+            const ap = parentSchema.additionalProperties;
+            if (typeof ap === 'object' && ap.type === 'object') {
+                return true; // dynamic keys are allowed under hosts
             }
         }
 
-        return result;
+        return false;
     }
 
-    function buildParentPath(lineIndex, indentLen, parsedData) {
-        // Walk backwards to find the nearest parent key at a shallower indent
-        const editor = document.getElementById('settingsEditor');
-        const lines = editor.value.split('\n');
-        for (let i = lineIndex - 1; i >= 0; i--) {
-            const prevLine = lines[i];
-            const prevIndent = (prevLine.match(/^(\s*)/)[1] || '').length;
-            if (prevIndent < indentLen) {
-                // This is a potential parent
-                const prevContent = prevLine.slice(prevIndent.length);
-                const parentMatch = prevContent.match(/^((?:"[^"]*"|'[^']*'|[^:\[#-][^:]*)):\s*/);
-                if (parentMatch) {
-                    const parentKey = parentMatch[1].replace(/^["']|["']$/g, '');
-                    // Check if we already have a parent path
-                    if (prevIndent === 0) {
-                        return parentKey;
-                    }
-                    // Need to find grandparent — for simplicity, return just the parent key
-                    return parentKey;
-                }
-            }
+    // Check if a value violates schema constraints (e.g. enum)
+    function isValueInvalid(keyClean, valStr, parentPath) {
+        let parentSchema;
+        if (parentPath) {
+            parentSchema = getSchemaAtPath(SETTINGS_SCHEMA, parentPath);
+        } else {
+            parentSchema = SETTINGS_SCHEMA;
         }
-        return '';
-    }
 
-    function findKeySchema(keyName, lineIndex, parsedData) {
-        const editor = document.getElementById('settingsEditor');
-        const lines = editor.value.split('\n');
-        const indentMatch = lines[lineIndex]?.match(/^(\s*)/);
-        const indentLen = indentMatch ? indentMatch[1].length : 0;
+        if (!parentSchema || !parentSchema.properties) return false;
 
-        // Find parent key
-        for (let i = lineIndex - 1; i >= 0; i--) {
-            const prevLine = lines[i];
-            const prevIndent = (prevLine.match(/^(\s*)/)[1] || '').length;
-            if (prevIndent < indentLen) {
-                const prevContent = prevLine.slice(prevIndent.length);
-                const parentMatch = prevContent.match(/^((?:"[^"]*"|'[^']*'|[^:\[#-][^:]*)):\s*(.*)/);
-                if (parentMatch) {
-                    const parentKey = parentMatch[1].replace(/^["']|["']$/g, '');
-                    // Look up schema for parent
-                    const parentSchema = getSchemaAtPath(SETTINGS_SCHEMA, parentKey);
-                    if (parentSchema && parentSchema.properties && parentSchema.properties[keyName]) {
-                        return parentSchema.properties[keyName];
-                    }
-                    if (parentSchema && parentSchema.additionalProperties) {
-                        const ap = parentSchema.additionalProperties;
-                        if (typeof ap === 'object' && ap.properties && ap.properties[keyName]) {
-                            return ap.properties[keyName];
-                        }
-                    }
-                }
-                break;
-            }
+        const keySchema = parentSchema.properties[keyClean];
+        if (!keySchema) return false;
+
+        if (keySchema.enum && !keySchema.enum.includes(valStr)) {
+            return true;
         }
-        return null;
+
+        return false;
     }
 
-    function highlightValue(val, isValid) {
+    // Highlight a single value token
+    function highlightValue(val, isSchemaValue) {
         const escaped = escapeHtml(val);
 
         // Quoted strings
@@ -1220,11 +1097,95 @@
             return `<span class="hl-tag">${escaped}</span>`;
         }
 
-        // Regular values — color based on validity
-        if (isValid) {
+        // Regular values — only color green if it's a schema-defined value
+        if (isSchemaValue) {
             return `<span class="hl-val-valid">${escaped}</span>`;
         }
-        return `<span class="hl-val-invalid">${escaped}</span>`;
+        // Non-schema values: return unstyled (transparent in highlight layer)
+        return escaped;
+    }
+
+    // Highlight a single line
+    function highlightLine(line, keyInfoMap, lineIndex) {
+        // Comments — render in gray
+        if (line.trimStart().startsWith('#')) {
+            return `<span class="hl-comment">${escapeHtml(line)}</span>`;
+        }
+
+        // Empty line
+        if (line.trim() === '') {
+            return '';
+        }
+
+        // YAML directives
+        if (line.trimStart().startsWith('%')) {
+            return `<span class="hl-directive">${escapeHtml(line)}</span>`;
+        }
+
+        const indentLen = (line.match(/^(\s*)/)[1] || '').length;
+        const content = line.slice(indentLen);
+
+        // Get key info for this line
+        const keyInfo = keyInfoMap.get(lineIndex);
+
+        // Build result: start with transparent indent
+        let result = escapeHtml(' '.repeat(indentLen));
+
+        if (keyInfo) {
+            const { keyRaw, keyClean, parentPath, thisPath, value } = keyInfo;
+
+            // Check if key is in schema
+            const keyInSchema = isKeyInSchema(keyClean, parentPath);
+            const valInvalid = isValueInvalid(keyClean, value, parentPath);
+
+            // Highlight key
+            if (keyInSchema) {
+                result += `<span class="hl-key-valid">${escapeHtml(keyRaw)}</span>`;
+            } else {
+                result += `<span class="hl-key-invalid">${escapeHtml(keyRaw)}</span>`;
+            }
+
+            // Colon separator (gray, visible)
+            result += `<span class="hl-colon">: </span>`;
+
+            // Highlight value
+            if (value) {
+                if (valInvalid) {
+                    result += `<span class="hl-val-invalid">${escapeHtml(value)}</span>`;
+                } else if (keyInSchema) {
+                    result += highlightValue(value, true);
+                } else {
+                    // Non-schema key's value — leave transparent (not visible in highlight layer)
+                    result += escapeHtml(value);
+                }
+            }
+        } else {
+            // No key info — could be a list item continuation or other
+            if (content.startsWith('- ')) {
+                result += `<span class="hl-dash">- </span>`;
+                const rest = content.slice(2);
+                // Check for nested key-value in list item
+                const nestedKv = rest.match(/^((?:"[^"]*"|'[^']*'|[^:\[#\-/][^:]*)):\s*(.*)/);
+                if (nestedKv) {
+                    const nKey = nestedKv[1];
+                    const nVal = nestedKv[2].trim();
+                    // List item keys are typically schema-defined (domain entries)
+                    result += `<span class="hl-key-valid">${escapeHtml(nKey)}</span>`;
+                    result += `<span class="hl-colon">: </span>`;
+                    if (nVal) {
+                        result += highlightValue(nVal, true);
+                    }
+                } else {
+                    // Plain list value — leave transparent
+                    result += escapeHtml(rest);
+                }
+            } else {
+                // Fallback: leave transparent
+                result += escapeHtml(content);
+            }
+        }
+
+        return result;
     }
 
     // Main highlight function — rebuilds the entire highlighted view
@@ -1242,7 +1203,12 @@
         }
 
         const lines = text.split('\n');
-        const highlighted = lines.map((line, idx) => highlightLine(line, parsedData, idx)).join('\n');
+
+        // Build key→parent map once
+        const keyParentMap = buildKeyParentMap(lines, parsedData);
+
+        // Highlight each line
+        const highlighted = lines.map((line, idx) => highlightLine(line, keyParentMap, idx)).join('\n');
 
         highlight.innerHTML = highlighted + '\n';
 
