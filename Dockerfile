@@ -11,9 +11,7 @@ RUN apk add --no-cache \
       openssh-client \
       rsync \
       yq-go \
-      py3-pip \
-      py3-yaml && \
-    pip3 install pyyaml
+      py3-yaml
 
 # -------------------------
 # Install acme.sh
