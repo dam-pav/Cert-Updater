@@ -95,11 +95,20 @@ stop_requested=0
 handle_shutdown() {
   stop_requested=1
   log "Shutdown signal received, stopping sync loop"
+  if [ -n "$SETTINGS_API_PID" ] && kill -0 "$SETTINGS_API_PID" 2>/dev/null; then
+    kill "$SETTINGS_API_PID" 2>/dev/null
+    log "Settings API server stopped"
+  fi
 }
 
 trap 'handle_shutdown' TERM INT
 
 log "Container started"
+
+# Start settings API server in background
+SETTINGS_PATH=/cert-updater/config/settings.yml SETTINGS_API_PORT=8081 python3 /cert-updater/bin/settings-api.py &
+SETTINGS_API_PID=$!
+log "Settings API server started (PID $SETTINGS_API_PID)"
 
 # Create passwd entry for current UID if missing (required for SSH)
 if ! whoami >/dev/null 2>&1; then
