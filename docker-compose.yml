@@ -106,5 +106,6 @@ services:
       - "${WEB_PORT:-8080}:80"
     volumes:
       - ${DATA_DIR}/cert-updater/export:/usr/share/nginx/html/export:ro
+      - ${DATA_DIR}/cert-updater/config:/cert-updater/config:ro
     depends_on:
       - cert-updater
