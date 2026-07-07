@@ -469,6 +469,10 @@
             border-radius: 8px;
             overflow: hidden;
             transition: border-color 0.2s;
+            /* Ensure consistent box model */
+            -webkit-text-size-adjust: none;
+            -moz-text-size-adjust: none;
+            text-size-adjust: none;
         }
 
         .editor-wrapper:focus-within {
@@ -477,7 +481,10 @@
 
         .editor-highlight {
             position: absolute;
-            inset: 0;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             width: 100%;
             min-height: 400px;
             font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
@@ -491,6 +498,11 @@
             overflow: auto;
             tab-size: 2;
             margin: 0;
+            border: none;
+            background: transparent;
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         .editor-highlight span {
@@ -504,9 +516,9 @@
             background: transparent;
             border: none;
             color: var(--text-primary);
-            font-family: inherit;
-            font-size: inherit;
-            line-height: inherit;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
             padding: 1rem;
             margin: 0;
             resize: vertical;
@@ -516,6 +528,12 @@
             tab-size: 2;
             caret-color: var(--accent);
             z-index: 1;
+            /* Remove default textarea styling */
+            border-radius: 0;
+            box-shadow: none;
+            -webkit-appearance: none;
+            appearance: none;
+            box-sizing: border-box;
         }
 
         /* Syntax highlight colors */
