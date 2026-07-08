@@ -1,13 +1,13 @@
-# Cert Updater
+# Certificate Updater
 
-A Docker-based automatic SSL/TLS certificate manager using [acme.sh](https://github.com/acmesh-official/acme.sh) with Let's Encrypt. Automatically issues, renews, and deploys certificates to remote hosts via SSH.
+Certificate Updater is a containerized automatic SSL/TLS certificate manager using [acme.sh](https://github.com/acmesh-official/acme.sh) with Let's Encrypt. Automatically issues, renews, and deploys certificates to remote hosts via SSH.
 
 ## Features
 
 - **Automatic certificate issuance and renewal** via Let's Encrypt
 - **DNS-01 challenge support** for wildcard certificates and internal servers
 - **Remote deployment** via SSH (scp or rsync)
-- **Multiple domains** configured via a single YAML file
+- **Multiple domains on multiple hosts** configured via a single YAML file
 - **Non-root container** execution with configurable UID/GID
 - **In-container sync loop** for automatic renewals with direct container logs
 - **Web dashboard** for real-time certificate status monitoring
@@ -132,6 +132,9 @@ cert-updater/
 ```
 
 ## settings.yml Configuration
+`settings.yml` represents your infrastructure. Hosts contain and serve the certificates - you need to define their location and means of updating. Certificates represent the domains you are maintaining - you need to specify the domain name itself, the host that is holding the certificate files, and the certificate strength. Furthermore, you need to provide infomration on how the ownership of the domain is being challenged.
+
+Instead of using literal values for tokens and account ids you can use use the environment variables. You can use any of them but of course only some of them make actual sense. 
 
 Place your `settings.yml` in `${DATA_DIR}/cert-updater/config/`. See `config/settings.yml.example` for reference.
 
@@ -173,8 +176,8 @@ The `dns.provider` value corresponds to acme.sh DNS API plugins. Common provider
 Currently supported:
 | Provider | `dns.provider` | Required Environment Variables |
 |----------|----------------|-------------------------------|
-| Cloudflare | `cf` | `CF_Token`, `CF_Account_ID` |
-| DuckDNS | `duckdns` | `DuckDNS_Token` |
+| Cloudflare | `cf` | `CF_API_TOKEN`, `CF_ACCOUNT_ID` |
+| DuckDNS | `duckdns` | `DUCKDNS_TOKEN` |
 
 Could receive support in future releases:
 | Provider | `dns.provider` | Required Environment Variables |
