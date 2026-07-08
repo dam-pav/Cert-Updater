@@ -493,7 +493,6 @@
             padding: 1rem;
             white-space: pre-wrap;
             word-wrap: break-word;
-            color: transparent;
             pointer-events: none;
             overflow: auto;
             tab-size: 2;
@@ -505,8 +504,9 @@
             print-color-adjust: exact;
         }
 
-        .editor-highlight span {
-            /* Only colored spans are visible; uncolored text stays transparent */
+        /* Uncolored text in the highlight layer is invisible */
+        .editor-highlight .hl-uncolored {
+            color: transparent;
         }
 
         .editor-textarea {
@@ -1146,8 +1146,11 @@
         // Get key info for this line
         const keyInfo = keyInfoMap.get(lineIndex);
 
+        // Helper: wrap uncolored text in transparent span
+        const uncolored = (text) => `<span class="hl-uncolored">${text}</span>`;
+
         // Build result: start with transparent indent
-        let result = escapeHtml(' '.repeat(indentLen));
+        let result = uncolored(escapeHtml(' '.repeat(indentLen)));
 
         if (keyInfo) {
             const { keyRaw, keyClean, parentPath, thisPath, value } = keyInfo;
@@ -1173,8 +1176,8 @@
                 } else if (keyInSchema) {
                     result += highlightValue(value, true);
                 } else {
-                    // Non-schema key's value — leave transparent (not visible in highlight layer)
-                    result += escapeHtml(value);
+                    // Non-schema key's value — leave transparent
+                    result += uncolored(escapeHtml(value));
                 }
             }
         } else {
@@ -1195,11 +1198,11 @@
                     }
                 } else {
                     // Plain list value — leave transparent
-                    result += escapeHtml(rest);
+                    result += uncolored(escapeHtml(rest));
                 }
             } else {
                 // Fallback: leave transparent
-                result += escapeHtml(content);
+                result += uncolored(escapeHtml(content));
             }
         }
 
