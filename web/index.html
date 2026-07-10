@@ -94,6 +94,11 @@
             margin-bottom: 2rem;
         }
 
+        .stats:empty {
+            display: none;
+            margin-bottom: 0;
+        }
+
         .stat-card {
             background: var(--bg-secondary);
             border: 1px solid var(--border);
@@ -127,10 +132,54 @@
         .stat-card.expired .number { color: var(--status-expired); }
         .stat-card.unknown .number { color: var(--status-unknown); }
 
+        .subpage-tabs {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.25rem;
+            margin-bottom: -1px;
+            padding-left: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .subpage-tab {
+            position: relative;
+            min-width: 8rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 600;
+            padding: 0.7rem 1rem;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+
+        .subpage-tab:hover {
+            color: var(--text-primary);
+            border-color: var(--accent);
+        }
+
+        .subpage-tab.active {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border-color: var(--border);
+            z-index: 1;
+        }
+
+        .subpage {
+            display: none;
+        }
+
+        .subpage.active {
+            display: block;
+        }
+
         .table-container {
             background: var(--bg-secondary);
             border: 1px solid var(--border);
-            border-radius: var(--radius);
+            border-radius: 0 var(--radius) var(--radius) var(--radius);
             overflow: hidden;
             box-shadow: var(--shadow);
         }
@@ -186,6 +235,25 @@
             border-radius: 6px;
             font-size: 0.82rem;
             font-weight: 500;
+        }
+
+        .transfer-badge {
+            display: inline-block;
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--status-valid);
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .command-text {
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
         }
 
         .provider-badge {
@@ -314,6 +382,10 @@
             body { padding: 1rem; }
             th, td { padding: 0.75rem 0.75rem; }
             .stats { grid-template-columns: repeat(2, 1fr); }
+            .subpage-tab {
+                flex: 1;
+                min-width: 0;
+            }
             table { font-size: 0.85rem; }
         }
 
@@ -694,32 +766,65 @@
             </button>
         </div>
 
-        <div class="stats" id="stats"></div>
+        <div class="subpage-tabs" role="tablist" aria-label="Dashboard views">
+            <button class="subpage-tab active" id="domainsTab" role="tab" aria-selected="true" aria-controls="domainsPage" onclick="switchSubpage('domains')">Domains</button>
+            <button class="subpage-tab" id="hostsTab" role="tab" aria-selected="false" aria-controls="hostsPage" onclick="switchSubpage('hosts')">Hosts</button>
+        </div>
 
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Domain</th>
-                        <th>Host</th>
-                        <th class="hide-mobile">Provider</th>
-                        <th>Status</th>
-                        <th class="hide-mobile">Last Checked</th>
-                        <th>Last Updated</th>
-                        <th>Next Update</th>
-                    </tr>
-                </thead>
-                <tbody id="domainTable">
-                    <tr>
-                        <td colspan="7">
-                            <div class="loading">
-                                <div class="spinner"></div>
-                                Loading certificate status...
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="subpage active" id="domainsPage" role="tabpanel" aria-labelledby="domainsTab">
+            <div class="stats" id="stats"></div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Host</th>
+                            <th class="hide-mobile">Provider</th>
+                            <th>Status</th>
+                            <th class="hide-mobile">Last Checked</th>
+                            <th>Last Updated</th>
+                            <th>Next Update</th>
+                        </tr>
+                    </thead>
+                    <tbody id="domainTable">
+                        <tr>
+                            <td colspan="7">
+                                <div class="loading">
+                                    <div class="spinner"></div>
+                                    Loading certificate status...
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="subpage" id="hostsPage" role="tabpanel" aria-labelledby="hostsTab">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Host</th>
+                            <th>URL</th>
+                            <th>Transfer</th>
+                            <th>Domains</th>
+                            <th class="hide-mobile">Reload</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hostTable">
+                        <tr>
+                            <td colspan="5">
+                                <div class="loading">
+                                    <div class="spinner"></div>
+                                    Loading host configuration...
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -764,6 +869,10 @@
     </button>
 
     <script>
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         function formatDateTime(timestamp) {
             if (!timestamp) return '—';
             const d = new Date(timestamp + 'Z');
@@ -787,6 +896,16 @@
             `;
         }
 
+        function switchSubpage(page) {
+            const isHosts = page === 'hosts';
+            document.getElementById('domainsPage').classList.toggle('active', !isHosts);
+            document.getElementById('hostsPage').classList.toggle('active', isHosts);
+            document.getElementById('domainsTab').classList.toggle('active', !isHosts);
+            document.getElementById('hostsTab').classList.toggle('active', isHosts);
+            document.getElementById('domainsTab').setAttribute('aria-selected', String(!isHosts));
+            document.getElementById('hostsTab').setAttribute('aria-selected', String(isHosts));
+        }
+
         function renderTable(domains) {
             const tbody = document.getElementById('domainTable');
 
@@ -805,13 +924,41 @@
 
             tbody.innerHTML = domains.map(d => `
                 <tr>
-                    <td class="domain-name">${d.name}</td>
-                    <td><span class="host-tag">${d.host || '—'}</span></td>
-                    <td class="hide-mobile"><span class="provider-badge">${d.provider || '—'}</span></td>
-                    <td><span class="status-badge ${d.status}"><span class="status-dot"></span>${d.status}</span></td>
+                    <td class="domain-name">${escapeHtml(d.name)}</td>
+                    <td><span class="host-tag">${escapeHtml(d.host || '—')}</span></td>
+                    <td class="hide-mobile"><span class="provider-badge">${escapeHtml(d.provider || '—')}</span></td>
+                    <td><span class="status-badge ${['valid', 'expired', 'unknown'].includes(d.status) ? d.status : 'unknown'}"><span class="status-dot"></span>${escapeHtml(d.status || 'unknown')}</span></td>
                     <td class="datetime hide-mobile">${formatDateTime(d.last_checked)}</td>
                     <td class="datetime">${formatDateTime(d.last_updated)}</td>
                     <td class="datetime">${formatDateTime(d.next_update)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderHostsTable(hosts) {
+            const tbody = document.getElementById('hostTable');
+
+            if (!hosts.length) {
+                tbody.innerHTML = `
+                    <tr><td colspan="5">
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                <path d="M3.75 4.5h16.5v6H3.75zM3.75 13.5h16.5v6H3.75z"/>
+                                <path d="M7.5 7.5h.01M7.5 16.5h.01"/>
+                            </svg>
+                            <p>No hosts configured</p>
+                        </div>
+                    </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = hosts.map(h => `
+                <tr>
+                    <td><span class="host-tag">${escapeHtml(h.name || '—')}</span></td>
+                    <td class="command-text">${escapeHtml(h.url || '—')}</td>
+                    <td><span class="transfer-badge">${escapeHtml(h.transfer || 'scp')}</span></td>
+                    <td>${Number.isFinite(Number(h.domain_count)) ? Number(h.domain_count) : 0}</td>
+                    <td class="command-text hide-mobile">${escapeHtml(h.reload || '—')}</td>
                 </tr>
             `).join('');
         }
@@ -828,11 +975,14 @@
                 const syncEl = document.getElementById('lastSync');
                 syncEl.innerHTML = `<span class="dot"></span><span>Last sync: ${formatDateTime(data.last_sync)}</span>`;
 
-                updateStats(data.domains);
-                renderTable(data.domains);
+                updateStats(data.domains || []);
+                renderTable(data.domains || []);
+                renderHostsTable(data.hosts || []);
             } catch (err) {
                 document.getElementById('domainTable').innerHTML = `
                     <tr><td colspan="7"><div class="error-msg">Failed to load status: ${err.message}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
+                document.getElementById('hostTable').innerHTML = `
+                    <tr><td colspan="5"><div class="error-msg">Failed to load hosts: ${err.message}</div></td></tr>`;
                 document.getElementById('stats').innerHTML = '';
             } finally {
                 btn.style.animation = '';
@@ -909,10 +1059,6 @@
     // ── Schema validation and highlighting ──
     const FREEFORM_OBJECT = { type: "object", additionalProperties: true };
     SETTINGS_SCHEMA.properties.domains.items.properties.dns.properties.env = FREEFORM_OBJECT;
-
-    function escapeHtml(str) {
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
 
     function stripYamlQuotes(value) {
         const trimmed = value.trim();

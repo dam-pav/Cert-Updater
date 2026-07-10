@@ -18,89 +18,121 @@ if [ ! -r "$CONFIG" ]; then
 fi
 
 domain_count=$(yq e '.domains // [] | length' "$CONFIG" 2>/dev/null || echo "0")
+host_count=$(yq e '.hosts // {} | keys | length' "$CONFIG" 2>/dev/null || echo "0")
 
-if [ "$domain_count" -eq 0 ] 2>/dev/null || [ -z "$domain_count" ]; then
-  echo "No domains configured."
-  cat > "$STATUS_FILE" <<EOF
-{
-  "last_sync": "$NOW",
-  "domains": []
+json_string() {
+  VALUE=$1 yq e -n -o=json -I=0 'strenv(VALUE)'
 }
-EOF
-  exit 0
-fi
 
 # Start building JSON
+hosts_json=""
 domains_json=""
 
 i=0
-while [ "$i" -lt "$domain_count" ]; do
-  domain_path=.domains[$i]
-  domain=$(yq e "$domain_path.name // \"\"" "$CONFIG")
-  host_name=$(yq e "$domain_path.host // \"\"" "$CONFIG")
-  dns_provider=$(yq e "$domain_path.dns.provider // \"\"" "$CONFIG")
+while [ "$i" -lt "$host_count" ]; do
+  host_name=$(yq e ".hosts // {} | keys | .[$i]" "$CONFIG")
+  host_url=$(HOST_NAME=$host_name yq e '.hosts[strenv(HOST_NAME)].url // ""' "$CONFIG")
+  host_transfer=$(HOST_NAME=$host_name yq e '.hosts[strenv(HOST_NAME)].transfer // "scp"' "$CONFIG")
+  host_reload=$(HOST_NAME=$host_name yq e '.hosts[strenv(HOST_NAME)].reload // ""' "$CONFIG")
+  host_domain_count=$(HOST_NAME=$host_name yq e '[.domains[]? | select(.host == strenv(HOST_NAME))] | length' "$CONFIG")
 
-  # Get renewal time from acme.sh config
-  cert_conf="/cert-updater/state/${domain}_ecc/${domain}.conf"
+  host_entry=$(cat <<ENTRY
+    {
+      "name": $(json_string "$host_name"),
+      "url": $(json_string "$host_url"),
+      "transfer": $(json_string "$host_transfer"),
+      "reload": $(json_string "$host_reload"),
+      "domain_count": $host_domain_count
+    }
+ENTRY
+)
+
+  if [ -n "$hosts_json" ]; then
+    hosts_json="${hosts_json},
+${host_entry}"
+  else
+    hosts_json="${host_entry}"
+  fi
+
+  i=$((i + 1))
+done
+
+if [ "$domain_count" -eq 0 ] 2>/dev/null || [ -z "$domain_count" ]; then
+  echo "No domains configured."
+else
+  i=0
+  while [ "$i" -lt "$domain_count" ]; do
+    domain_path=.domains[$i]
+    domain=$(yq e "$domain_path.name // \"\"" "$CONFIG")
+    host_name=$(yq e "$domain_path.host // \"\"" "$CONFIG")
+    dns_provider=$(yq e "$domain_path.dns.provider // \"\"" "$CONFIG")
+
+    # Get renewal time from acme.sh config
+    cert_conf="/cert-updater/state/${domain}_ecc/${domain}.conf"
   
-  last_updated=""
-  next_update=""
-  renewal_epoch=""
+    last_updated=""
+    next_update=""
+    next_renewal=""
+    renewal_epoch=""
   
-  if [ -r "$cert_conf" ]; then
-    # Extract Le_NextRenewTime
-    next_renewal=$(sed -n "s/^Le_NextRenewTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
+    if [ -r "$cert_conf" ]; then
+      # Extract Le_NextRenewTime
+      next_renewal=$(sed -n "s/^Le_NextRenewTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
     
-    if [ -n "$next_renewal" ] && [ "$next_renewal" -gt 0 ] 2>/dev/null; then
-      # Next renewal is in the future
-      next_update=$(date -u -d "@$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
-      renewal_epoch=$next_renewal
+      if [ -n "$next_renewal" ] && [ "$next_renewal" -gt 0 ] 2>/dev/null; then
+        # Next renewal is in the future
+        next_update=$(date -u -d "@$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+        renewal_epoch=$next_renewal
       
-      # Get issue time for last_updated
-      issue_time=$(sed -n "s/^Le_IssueTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
-      if [ -n "$issue_time" ] && [ "$issue_time" -gt 0 ] 2>/dev/null; then
-        last_updated=$(date -u -d "@$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+        # Get issue time for last_updated
+        issue_time=$(sed -n "s/^Le_IssueTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
+        if [ -n "$issue_time" ] && [ "$issue_time" -gt 0 ] 2>/dev/null; then
+          last_updated=$(date -u -d "@$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+        fi
       fi
     fi
-  fi
   
-  # Determine status
-  if [ -z "$next_renewal" ] || [ "$next_renewal" -eq 0 ] 2>/dev/null; then
-    status="unknown"
-  elif [ "$renewal_epoch" -le "$NOW_EPOCH" ] 2>/dev/null; then
-    status="expired"
-  else
-    status="valid"
-  fi
+    # Determine status
+    if [ -z "$next_renewal" ] || [ "$next_renewal" -eq 0 ] 2>/dev/null; then
+      status="unknown"
+    elif [ "$renewal_epoch" -le "$NOW_EPOCH" ] 2>/dev/null; then
+      status="expired"
+    else
+      status="valid"
+    fi
   
-  # Build domain JSON entry
-  domain_entry=$(cat <<ENTRY
+    # Build domain JSON entry
+    domain_entry=$(cat <<ENTRY
     {
-      "name": "$domain",
-      "host": "$host_name",
-      "provider": "$dns_provider",
-      "last_checked": "$NOW",
-      "last_updated": "$last_updated",
-      "next_update": "$next_update",
-      "status": "$status"
+      "name": $(json_string "$domain"),
+      "host": $(json_string "$host_name"),
+      "provider": $(json_string "$dns_provider"),
+      "last_checked": $(json_string "$NOW"),
+      "last_updated": $(json_string "$last_updated"),
+      "next_update": $(json_string "$next_update"),
+      "status": $(json_string "$status")
     }
 ENTRY
 )
   
-  if [ -n "$domains_json" ]; then
-    domains_json="${domains_json},
+    if [ -n "$domains_json" ]; then
+      domains_json="${domains_json},
 ${domain_entry}"
-  else
-    domains_json="${domain_entry}"
-  fi
+    else
+      domains_json="${domain_entry}"
+    fi
   
-  i=$((i + 1))
-done
+    i=$((i + 1))
+  done
+fi
 
 # Write final status.json
 cat > "$STATUS_FILE" <<EOF
 {
   "last_sync": "$NOW",
+  "hosts": [
+${hosts_json}
+  ],
   "domains": [
 ${domains_json}
   ]
