@@ -1550,17 +1550,140 @@
         el.innerHTML = '';
     }
 
+    function getYamlLinePath(line, context) {
+        const indent = (line.match(/^(\s*)/) || [''])[0].length;
+        const trimmed = line.trimStart();
+        if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('%')) return null;
+
+        while (context.stack.length && context.stack[context.stack.length - 1].indent >= indent) {
+            context.stack.pop();
+        }
+
+        const parent = context.stack.length ? context.stack[context.stack.length - 1] : { path: '', schema: SETTINGS_SCHEMA };
+        let content = line.slice(indent);
+        let listIndex = null;
+        let itemPath = parent.path;
+        let itemSchema = parent.schema;
+
+        if (content.startsWith('- ')) {
+            const counterKey = `${parent.path}|${indent}`;
+            listIndex = context.arrayCounters.get(counterKey) || 0;
+            context.arrayCounters.set(counterKey, listIndex + 1);
+            content = content.slice(2);
+
+            if (parent.schema && parent.schema.type === 'array') {
+                itemPath = `${parent.path}[${listIndex}]`;
+                itemSchema = parent.schema.items;
+                context.stack.push({ indent: indent + 1, path: itemPath, schema: itemSchema });
+            }
+        }
+
+        const kv = parseKeyValue(content);
+        if (!kv || !kv.keyRaw) return itemPath || null;
+
+        const parentPath = listIndex === null ? parent.path : itemPath;
+        const parentSchema = listIndex === null ? parent.schema : itemSchema;
+        const keyClean = stripYamlQuotes(kv.keyRaw);
+        const child = getAllowedChildSchema(parentSchema, keyClean);
+        const childPath = parentPath ? `${parentPath}.${keyClean}` : keyClean;
+        const valueText = kv.valueRaw.trim();
+
+        if (child.schema && !valueText) {
+            context.stack.push({ indent, path: childPath, schema: child.schema });
+        }
+
+        return childPath;
+    }
+
+    function getYamlLinePaths(lines) {
+        const context = { stack: [], arrayCounters: new Map() };
+        return lines.map(line => getYamlLinePath(line, context));
+    }
+
+    function collectYamlComments(yamlText) {
+        const lines = yamlText.split('\n');
+        const linePaths = getYamlLinePaths(lines);
+        const inline = new Map();
+        const before = new Map();
+        const trailing = [];
+        let pending = [];
+
+        lines.forEach((line, index) => {
+            const trimmed = line.trimStart();
+            const path = linePaths[index];
+
+            if (!trimmed) {
+                if (pending.length) pending.push(line);
+                return;
+            }
+
+            if (trimmed.startsWith('#')) {
+                pending.push(line);
+                return;
+            }
+
+            if (path && pending.length) {
+                if (!before.has(path)) before.set(path, []);
+                before.get(path).push(...pending);
+                pending = [];
+            }
+
+            if (!path) return;
+
+            const commentStart = findInlineCommentStart(line);
+            if (commentStart >= 0) {
+                inline.set(path, line.slice(commentStart));
+            }
+        });
+
+        if (pending.length) trailing.push(...pending);
+
+        return { inline, before, trailing };
+    }
+
+    function addInlineComment(line, comment) {
+        if (!comment || findInlineCommentStart(line) >= 0) return line;
+        const padding = line.length < 28 ? ' '.repeat(28 - line.length) : '  ';
+        return `${line}${padding}${comment.trimStart()}`;
+    }
+
+    function restoreYamlComments(formattedText, comments) {
+        const lines = formattedText.replace(/\n$/, '').split('\n');
+        const linePaths = getYamlLinePaths(lines);
+        const output = [];
+
+        lines.forEach((line, index) => {
+            const path = linePaths[index];
+            if (path && comments.before.has(path)) {
+                output.push(...comments.before.get(path));
+            }
+
+            output.push(path && comments.inline.has(path)
+                ? addInlineComment(line, comments.inline.get(path))
+                : line);
+        });
+
+        if (comments.trailing.length) {
+            if (output.length && output[output.length - 1].trim()) output.push('');
+            output.push(...comments.trailing);
+        }
+
+        return output.join('\n') + '\n';
+    }
+
     function formatYaml() {
         const editor = document.getElementById('settingsEditor');
         try {
+            const comments = collectYamlComments(editor.value);
             const parsed = jsyaml.load(editor.value);
-            editor.value = jsyaml.dump(parsed, {
+            const formatted = jsyaml.dump(parsed, {
                 indent: 2,
                 lineWidth: 120,
                 noRefs: true,
                 quotingType: '"',
                 forceQuotes: false
             });
+            editor.value = restoreYamlComments(formatted, comments);
             validateAndEnableSave();
         } catch (e) {
             alert('Cannot format: invalid YAML\n' + e.message);
