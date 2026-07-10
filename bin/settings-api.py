@@ -100,6 +100,7 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
 
             # Validate against schema
             errors = validate_against_schema(data, SCHEMA)
+            errors.extend(validate_host_references(data))
             if errors:
                 self._send_json(400, {"error": "Validation failed", "details": errors})
                 return
@@ -161,6 +162,28 @@ def validate_against_schema(data, schema):
     if "enum" in schema and data not in schema["enum"]:
         errors.append(f"Value must be one of: {schema['enum']}")
 
+    return errors
+
+
+def validate_host_references(data):
+    """Ensure every domain host points to a key in the hosts section."""
+    if not isinstance(data.get("domains"), list):
+        return []
+
+    errors = []
+    host_names = set(data["hosts"].keys()) if isinstance(data.get("hosts"), dict) else set()
+    for index, domain in enumerate(data["domains"]):
+        if not isinstance(domain, dict) or not isinstance(domain.get("host"), str):
+            continue
+        if domain["host"] not in host_names:
+            if host_names:
+                errors.append(
+                    f"domains[{index}].host: '{domain['host']}' does not match any configured host"
+                )
+            else:
+                errors.append(
+                    f"domains[{index}].host: '{domain['host']}' cannot be resolved because no hosts are configured"
+                )
     return errors
 
 
