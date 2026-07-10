@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Certificate Status Dashboard</title>
+    <title>Certificate Updater Status</title>
     <style>
         :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-card: #334155;
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --accent: #38bdf8;
-            --accent-glow: rgba(56, 189, 248, 0.15);
-            --border: #475569;
-            --status-valid: #22c55e;
-            --status-expired: #ef4444;
-            --status-unknown: #f59e0b;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-card: #eef4fb;
+            --text-primary: #172033;
+            --text-secondary: #64748b;
+            --accent: #005dff;
+            --accent-muted: #2563eb;
+            --accent-glow: rgba(0, 93, 255, 0.1);
+            --border: #d5e0ee;
+            --status-valid: #16a34a;
+            --status-expired: #dc2626;
+            --status-unknown: #d97706;
             --radius: 12px;
-            --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
         }
 
         * {
@@ -41,24 +42,30 @@
         }
 
         header {
-            text-align: center;
-            margin-bottom: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            text-align: left;
+            margin-bottom: 2rem;
         }
 
         header h1 {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
             font-size: 2rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--accent), #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.5px;
+            color: var(--text-primary);
+            letter-spacing: 0;
+            line-height: 1.15;
         }
 
-        header p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
+        .title-logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            box-shadow: 0 8px 18px rgba(0, 93, 255, 0.16);
         }
 
         .last-sync {
@@ -70,8 +77,8 @@
             border-radius: 20px;
             font-size: 0.85rem;
             color: var(--text-secondary);
-            margin-top: 0.75rem;
             border: 1px solid var(--border);
+            white-space: nowrap;
         }
 
         .last-sync .dot {
@@ -87,51 +94,6 @@
             50% { opacity: 0.4; }
         }
 
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .stats:empty {
-            display: none;
-            margin-bottom: 0;
-        }
-
-        .stat-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1.25rem;
-            text-align: center;
-            box-shadow: var(--shadow);
-            transition: transform 0.2s, border-color 0.2s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            border-color: var(--accent);
-        }
-
-        .stat-card .number {
-            font-size: 2rem;
-            font-weight: 700;
-            line-height: 1;
-            margin-bottom: 0.35rem;
-        }
-
-        .stat-card .label {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-card.valid .number { color: var(--status-valid); }
-        .stat-card.expired .number { color: var(--status-expired); }
-        .stat-card.unknown .number { color: var(--status-unknown); }
-
         .subpage-tabs {
             display: flex;
             align-items: flex-end;
@@ -144,7 +106,7 @@
         .subpage-tab {
             position: relative;
             min-width: 8rem;
-            background: var(--bg-primary);
+            background: #f3f7fc;
             border: 1px solid var(--border);
             border-bottom: none;
             border-radius: 8px 8px 0 0;
@@ -207,7 +169,7 @@
         td {
             padding: 1rem 1.25rem;
             font-size: 0.9rem;
-            border-bottom: 1px solid rgba(71, 85, 105, 0.4);
+            border-bottom: 1px solid rgba(213, 224, 238, 0.8);
         }
 
         tr:last-child td {
@@ -219,7 +181,7 @@
         }
 
         tbody tr:hover {
-            background: rgba(56, 189, 248, 0.04);
+            background: rgba(0, 93, 255, 0.04);
         }
 
         .domain-name {
@@ -258,8 +220,8 @@
 
         .provider-badge {
             display: inline-block;
-            background: rgba(167, 139, 250, 0.15);
-            color: #a78bfa;
+            background: rgba(99, 102, 241, 0.12);
+            color: #4f46e5;
             padding: 0.25rem 0.65rem;
             border-radius: 6px;
             font-size: 0.82rem;
@@ -350,38 +312,14 @@
             opacity: 0.4;
         }
 
-        .refresh-btn {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: var(--accent);
-            color: var(--bg-primary);
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 16px rgba(56, 189, 248, 0.3);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .refresh-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 24px rgba(56, 189, 248, 0.4);
-        }
-
-        .refresh-btn svg {
-            width: 22px;
-            height: 22px;
-        }
-
         @media (max-width: 768px) {
             body { padding: 1rem; }
+            header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 1rem;
+            }
             th, td { padding: 0.75rem 0.75rem; }
-            .stats { grid-template-columns: repeat(2, 1fr); }
             .subpage-tab {
                 flex: 1;
                 min-width: 0;
@@ -428,7 +366,7 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(15, 23, 42, 0.35);
             z-index: 1000;
             justify-content: center;
             align-items: center;
@@ -448,7 +386,7 @@
             max-height: 85vh;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
         }
 
         .modal-header {
@@ -513,7 +451,7 @@
 
         .editor-toolbar button:hover {
             border-color: var(--accent);
-            background: rgba(56, 189, 248, 0.1);
+            background: var(--accent-glow);
         }
 
         .editor-toolbar button.primary {
@@ -524,7 +462,7 @@
         }
 
         .editor-toolbar button.primary:hover {
-            background: #7dd3fc;
+            background: var(--accent-muted);
         }
 
         .editor-toolbar button:disabled {
@@ -614,7 +552,7 @@
         }
 
         .editor-textarea::selection {
-            background: rgba(56, 189, 248, 0.28);
+            background: rgba(0, 93, 255, 0.18);
         }
 
         .editor-textarea::placeholder {
@@ -623,8 +561,8 @@
         }
 
         /* Syntax highlight colors */
-        .hl-key-valid { color: #4ade80; font-weight: 600; }       /* green — valid schema key */
-        .hl-val-valid { color: #93c5fd; }       /* light blue — schema value */
+        .hl-key-valid { color: #15803d; font-weight: 600; }       /* green — valid schema key */
+        .hl-val-valid { color: #1d4ed8; }       /* blue — schema value */
         .hl-key-invalid { color: var(--text-primary); font-weight: 600; }    /* invalid key, marked by underline */
         .hl-val-invalid { color: var(--text-primary); }    /* invalid value, marked by underline */
         .hl-error-symbol {
@@ -636,12 +574,12 @@
             text-underline-offset: 3px;
         }
         .hl-comment { color: #64748b; font-style: italic; } /* comments */
-        .hl-string { color: #93c5fd; }           /* blue strings */
-        .hl-anchor { color: #c084fc; }           /* purple YAML anchors/aliases */
-        .hl-directive { color: #a78bfa; }        /* YAML directives */
-        .hl-tag { color: #fbbf24; }              /* YAML tags */
-        .hl-null { color: #f472b6; }             /* null values */
-        .hl-bool { color: #fb923c; }             /* booleans */
+        .hl-string { color: #1d4ed8; }           /* blue strings */
+        .hl-anchor { color: #7c3aed; }           /* purple YAML anchors/aliases */
+        .hl-directive { color: #4f46e5; }        /* YAML directives */
+        .hl-tag { color: #b45309; }              /* YAML tags */
+        .hl-null { color: #be185d; }             /* null values */
+        .hl-bool { color: #c2410c; }             /* booleans */
         .hl-colon { color: var(--text-secondary); } /* colon separator */
         .hl-dash { color: var(--text-secondary); }  /* list dash */
 
@@ -748,8 +686,10 @@
 <body>
     <div class="container">
         <header>
-            <h1>🔐 Certificate Status Dashboard</h1>
-            <p>SSL/TLS certificate monitoring for all configured domains</p>
+            <h1>
+                <img class="title-logo" src="dam-pav.logo.svg" alt="DAM PAV">
+                Certificate Updater Status
+            </h1>
             <div class="last-sync" id="lastSync">
                 <span class="dot"></span>
                 <span>Loading...</span>
@@ -772,8 +712,6 @@
         </div>
 
         <div class="subpage active" id="domainsPage" role="tabpanel" aria-labelledby="domainsTab">
-            <div class="stats" id="stats"></div>
-
             <div class="table-container">
                 <table>
                     <thead>
@@ -860,14 +798,6 @@
         </div>
     </div>
 
-    <button class="refresh-btn" onclick="loadStatus()" title="Refresh">
-        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-            <path d="M4 4v5h5M20 20v-5h-5"/>
-            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L4 4"/>
-            <path d="M3.51 15a9 9 0 0 0 14.85 3.36L20 20"/>
-        </svg>
-    </button>
-
     <script>
         function escapeHtml(str) {
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -882,18 +812,6 @@
                 hour: '2-digit', minute: '2-digit', second: '2-digit',
                 hour12: false, timeZone: 'UTC'
             }) + ' UTC';
-        }
-
-        function updateStats(domains) {
-            const stats = { total: domains.length, valid: 0, expired: 0, unknown: 0 };
-            domains.forEach(d => { stats[d.status] = (stats[d.status] || 0) + 1; });
-
-            document.getElementById('stats').innerHTML = `
-                <div class="stat-card"><div class="number">${stats.total}</div><div class="label">Total</div></div>
-                <div class="stat-card valid"><div class="number">${stats.valid}</div><div class="label">Valid</div></div>
-                <div class="stat-card expired"><div class="number">${stats.expired}</div><div class="label">Expired</div></div>
-                <div class="stat-card unknown"><div class="number">${stats.unknown}</div><div class="label">Unknown</div></div>
-            `;
         }
 
         function switchSubpage(page) {
@@ -964,9 +882,6 @@
         }
 
         async function loadStatus() {
-            const btn = document.querySelector('.refresh-btn svg');
-            btn.style.animation = 'spin 0.8s linear infinite';
-
             try {
                 const res = await fetch('status.json?t=' + Date.now());
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -975,7 +890,6 @@
                 const syncEl = document.getElementById('lastSync');
                 syncEl.innerHTML = `<span class="dot"></span><span>Last sync: ${formatDateTime(data.last_sync)}</span>`;
 
-                updateStats(data.domains || []);
                 renderTable(data.domains || []);
                 renderHostsTable(data.hosts || []);
             } catch (err) {
@@ -983,9 +897,6 @@
                     <tr><td colspan="7"><div class="error-msg">Failed to load status: ${err.message}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
                 document.getElementById('hostTable').innerHTML = `
                     <tr><td colspan="5"><div class="error-msg">Failed to load hosts: ${err.message}</div></td></tr>`;
-                document.getElementById('stats').innerHTML = '';
-            } finally {
-                btn.style.animation = '';
             }
         }
 
