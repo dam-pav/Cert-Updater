@@ -9,48 +9,24 @@ import yaml
 from datetime import datetime, timezone
 
 SETTINGS_PATH = os.environ.get("SETTINGS_PATH", "/cert-updater/config/settings.yml")
+SCHEMA_PATH = os.environ.get("SETTINGS_SCHEMA_PATH", "/cert-updater/web/settings.schema.json")
 PORT = int(os.environ.get("SETTINGS_API_PORT", "8081"))
 
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        "hosts": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string"},
-                    "transfer": {"type": "string", "enum": ["scp", "rsync"]},
-                    "reload": {"type": "string"}
-                },
-                "required": ["url", "reload"]
-            }
-        },
-        "domains": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "keylength": {"type": "string"},
-                    "dns": {
-                        "type": "object",
-                        "properties": {
-                            "provider": {"type": "string"},
-                            "env": {"type": "object"}
-                        },
-                        "required": ["provider"]
-                    },
-                    "host": {"type": "string"},
-                    "dest": {"type": "string"}
-                },
-                "required": ["name", "keylength", "host", "dest"]
-            }
-        }
-    },
-    "required": ["hosts", "domains"]
-}
+
+def load_schema():
+    schema_path = SCHEMA_PATH
+    if "SETTINGS_SCHEMA_PATH" not in os.environ and not os.path.exists(schema_path):
+        repo_schema_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "web", "settings.schema.json")
+        )
+        if os.path.exists(repo_schema_path):
+            schema_path = repo_schema_path
+
+    with open(schema_path, "r") as f:
+        return json.load(f)
+
+
+SCHEMA = load_schema()
 
 
 class SettingsHandler(http.server.BaseHTTPRequestHandler):
@@ -123,6 +99,10 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
 def validate_against_schema(data, schema):
     """Simple schema validator supporting type, required, enum, properties, items."""
     errors = []
+    if schema is True:
+        return errors
+    if schema is False:
+        return ["Unknown field is not allowed"]
 
     # Type check
     if "type" in schema:
@@ -144,12 +124,23 @@ def validate_against_schema(data, schema):
                 errors.append(f"Missing required field: '{field}'")
 
     # Properties validation
-    if schema.get("type") == "object" and "properties" in schema:
-        for prop, prop_schema in schema["properties"].items():
-            if prop in data:
-                sub_errors = validate_against_schema(data[prop], prop_schema)
-                for e in sub_errors:
-                    errors.append(f"{prop}.{e}" if prop else e)
+    if schema.get("type") == "object":
+        properties = schema.get("properties", {})
+        for prop, value in data.items():
+            if prop in properties:
+                prop_schema = properties[prop]
+            else:
+                additional = schema.get("additionalProperties", False)
+                if additional is True:
+                    continue
+                if additional is False:
+                    errors.append(f"Unknown field: '{prop}'")
+                    continue
+                prop_schema = additional
+
+            sub_errors = validate_against_schema(value, prop_schema)
+            for e in sub_errors:
+                errors.append(f"{prop}.{e}" if prop else e)
 
     # Array items validation
     if schema.get("type") == "array" and "items" in schema:

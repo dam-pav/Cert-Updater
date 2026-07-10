@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cert-updater settings.yml",
+  "type": "object",
+  "required": ["hosts", "domains"],
+  "properties": {
+    "hosts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["url", "reload"],
+        "properties": {
+          "url": { "type": "string" },
+          "transfer": { "type": "string", "enum": ["scp", "rsync"] },
+          "reload": { "type": "string" }
+        }
+      }
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "keylength", "host", "dest"],
+        "properties": {
+          "name": { "type": "string" },
+          "keylength": { "type": "string" },
+          "dns": {
+            "type": "object",
+            "required": ["provider"],
+            "properties": {
+              "provider": { "type": "string", "enum": ["cf", "duckdns"] },
+              "env": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "host": { "type": "string" },
+          "dest": { "type": "string" }
+        }
+      }
+    }
+  }
+}

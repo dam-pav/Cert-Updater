@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link id="settingsSchemaAsset" rel="schema" href="settings.schema.json" type="application/json">
     <title>Certificate Updater Status</title>
     <style>
         :root {
@@ -584,10 +585,12 @@
         }
 
         /* Syntax highlight colors */
-        .hl-key-valid { color: #15803d; }       /* green — valid schema key */
-        .hl-val-valid { color: #1d4ed8; }       /* blue — schema value */
-        .hl-key-invalid { color: var(--text-primary); }    /* invalid key, marked by underline */
-        .hl-val-invalid { color: var(--text-primary); }    /* invalid value, marked by underline */
+        .editor-highlight .hl-key-valid {
+            color: #047857;
+        }
+        .editor-highlight .hl-val-valid { color: #1d4ed8; }
+        .editor-highlight .hl-key-invalid { color: var(--text-primary); }    /* invalid key, marked by underline */
+        .editor-highlight .hl-val-invalid { color: var(--text-primary); }    /* invalid value, marked by underline */
         .hl-error-symbol {
             background: transparent;
             text-decoration-line: underline;
@@ -596,15 +599,15 @@
             text-decoration-thickness: 1.5px;
             text-underline-offset: 3px;
         }
-        .hl-comment { color: #64748b; } /* comments */
-        .hl-string { color: #1d4ed8; }           /* blue strings */
-        .hl-anchor { color: #7c3aed; }           /* purple YAML anchors/aliases */
-        .hl-directive { color: #4f46e5; }        /* YAML directives */
-        .hl-tag { color: #b45309; }              /* YAML tags */
-        .hl-null { color: #be185d; }             /* null values */
-        .hl-bool { color: #c2410c; }             /* booleans */
-        .hl-colon { color: var(--text-secondary); } /* colon separator */
-        .hl-dash { color: var(--text-secondary); }  /* list dash */
+        .editor-highlight .hl-comment { color: #64748b; } /* comments */
+        .editor-highlight .hl-string { color: #1d4ed8; }           /* blue strings */
+        .editor-highlight .hl-anchor { color: #7c3aed; }           /* purple YAML anchors/aliases */
+        .editor-highlight .hl-directive { color: #4f46e5; }        /* YAML directives */
+        .editor-highlight .hl-tag { color: #b45309; }              /* YAML tags */
+        .editor-highlight .hl-null { color: #be185d; }             /* null values */
+        .editor-highlight .hl-bool { color: #c2410c; }             /* booleans */
+        .editor-highlight .hl-colon { color: #94a3b8; } /* colon separator */
+        .editor-highlight .hl-dash { color: #94a3b8; }  /* list dash */
 
         @media (max-width: 768px) {
             .editor-wrapper {
@@ -929,49 +932,12 @@
 
     <script>
     // ── JSON Schema for settings.yml validation ──
-    const SETTINGS_SCHEMA = {
-        type: "object",
-        required: ["hosts", "domains"],
-        properties: {
-            hosts: {
-                type: "object",
-                additionalProperties: {
-                    type: "object",
-                    required: ["url", "reload"],
-                    properties: {
-                        url: { type: "string" },
-                        transfer: { type: "string", enum: ["scp", "rsync"] },
-                        reload: { type: "string" }
-                    }
-                }
-            },
-            domains: {
-                type: "array",
-                items: {
-                    type: "object",
-                    required: ["name", "keylength", "host", "dest"],
-                    properties: {
-                        name: { type: "string" },
-                        keylength: { type: "string" },
-                        dns: {
-                            type: "object",
-                            required: ["provider"],
-                            properties: {
-                                provider: { type: "string" },
-                                env: { type: "object" }
-                            }
-                        },
-                        host: { type: "string" },
-                        dest: { type: "string" }
-                    }
-                }
-            }
-        }
-    };
+    let SETTINGS_SCHEMA = null;
 
     // ── Simple YAML parser (subset for validation) ──
     // Uses js-yaml loaded from CDN for robust parsing
     let yamlLoaded = false;
+    let schemaLoadPromise = null;
 
     function loadYamlLibrary() {
         if (yamlLoaded) return Promise.resolve();
@@ -992,7 +958,27 @@
 
     // ── Schema validation and highlighting ──
     const FREEFORM_OBJECT = { type: "object", additionalProperties: true };
-    SETTINGS_SCHEMA.properties.domains.items.properties.dns.properties.env = FREEFORM_OBJECT;
+
+    function loadSettingsSchema() {
+        if (SETTINGS_SCHEMA) return Promise.resolve(SETTINGS_SCHEMA);
+        if (schemaLoadPromise) return schemaLoadPromise;
+
+        const schemaUrl = document.getElementById('settingsSchemaAsset').href;
+        schemaLoadPromise = fetch(schemaUrl, { cache: 'no-store' })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                return res.json();
+            })
+            .then(schema => {
+                SETTINGS_SCHEMA = schema;
+                return SETTINGS_SCHEMA;
+            })
+            .finally(() => {
+                schemaLoadPromise = null;
+            });
+
+        return schemaLoadPromise;
+    }
 
     function stripYamlQuotes(value) {
         const trimmed = value.trim();
@@ -1144,6 +1130,17 @@
     }
 
     function validateYamlContent(yamlText) {
+        if (!SETTINGS_SCHEMA) {
+            return {
+                valid: false,
+                errors: [{
+                    path: '',
+                    kind: 'value',
+                    message: `settings schema is not loaded from ${document.getElementById('settingsSchemaAsset').href}`
+                }]
+            };
+        }
+
         let parsed;
         try {
             parsed = jsyaml.load(yamlText);
@@ -1440,11 +1437,55 @@
         highlightContent.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
     }
 
+    function stripYamlMarkdownFence(text) {
+        const lines = text.split('\n');
+        const firstContent = lines.findIndex(line => line.trim());
+        if (firstContent >= 0 && lines[firstContent].trim().startsWith('```')) {
+            lines.splice(firstContent, 1);
+        }
+
+        let lastContent = -1;
+        for (let index = lines.length - 1; index >= 0; index--) {
+            if (lines[index].trim()) {
+                lastContent = index;
+                break;
+            }
+        }
+
+        if (lastContent >= 0 && lines[lastContent].trim().startsWith('```')) {
+            lines.splice(lastContent, 1);
+        }
+
+        return lines.join('\n').trim() + '\n';
+    }
+
+    async function loadPreviewSettingsExample() {
+        const res = await fetch(`../config/settings.yml.example?t=${Date.now()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        return stripYamlMarkdownFence(await res.text());
+    }
+
     // ── Editor functions ──
     async function openSettingsEditor() {
-        await loadYamlLibrary();
         const modal = document.getElementById('settingsModal');
+        const editor = document.getElementById('settingsEditor');
+        const status = document.getElementById('editorStatus');
+        const saveBtn = document.getElementById('saveBtn');
+
         modal.classList.add('active');
+        status.innerHTML = '<span class="loading-indicator"><span class="spinner"></span>Loading...</span>';
+        saveBtn.disabled = true;
+
+        try {
+            await loadYamlLibrary();
+            await loadSettingsSchema();
+        } catch (err) {
+            status.innerHTML = `<span style="color: var(--status-expired);">✗ ${err.message}</span>`;
+            editor.value = '# Error opening settings editor\n# ' + err.message;
+            updateHighlighting();
+            return;
+        }
+
         await loadSettings();
     }
 
@@ -1463,6 +1504,16 @@
         saveBtn.disabled = true;
 
         try {
+            await loadYamlLibrary();
+            await loadSettingsSchema();
+        } catch (err) {
+            status.innerHTML = `<span style="color: var(--status-expired);">✗ ${err.message}</span>`;
+            editor.value = '# Error loading settings editor dependencies\n# ' + err.message;
+            updateHighlighting();
+            return;
+        }
+
+        try {
             const res = await fetch('/api/settings/read');
             if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
             const content = await res.text();
@@ -1471,9 +1522,18 @@
             status.innerHTML = '<span style="color: var(--status-valid);">✓ Loaded</span>';
             validateAndEnableSave();
         } catch (err) {
-            status.innerHTML = `<span style="color: var(--status-expired);">✗ ${err.message}</span>`;
-            editor.value = '# Error loading settings.yml\n# ' + err.message;
-            updateHighlighting();
+            try {
+                editor.value = await loadPreviewSettingsExample();
+                await loadSettingsSchema();
+                const validation = validateAndEnableSave();
+                status.innerHTML = validation.valid
+                    ? '<span style="color: var(--status-valid);">✓ Loaded example</span>'
+                    : '<span style="color: var(--status-expired);">✗ Loaded example with validation errors</span>';
+            } catch {
+                status.innerHTML = `<span style="color: var(--status-expired);">✗ ${err.message}</span>`;
+                editor.value = '# Error loading settings.yml\n# ' + err.message;
+                updateHighlighting();
+            }
         }
     }
 
@@ -1483,6 +1543,15 @@
         const status = document.getElementById('editorStatus');
 
         // Validate before saving
+        try {
+            await loadSettingsSchema();
+        } catch (err) {
+            saveBtn.disabled = true;
+            status.innerHTML = `<span style="color: var(--status-expired);">✗ Schema unavailable</span>`;
+            showValidationStatus([{ message: `Cannot validate settings: ${err.message}` }], false);
+            return;
+        }
+
         const validation = validateYamlContent(editor.value);
         if (!validation.valid) {
             updateHighlighting(validation);
@@ -1531,6 +1600,12 @@
 
         updateHighlighting(validation);
         saveBtn.disabled = !validation.valid;
+        if (validation.valid) {
+            clearValidationStatus();
+        } else {
+            showValidationStatus(validation.errors, false);
+        }
+        return validation;
     }
 
     function showValidationStatus(messages, isSuccess) {
