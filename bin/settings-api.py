@@ -303,7 +303,6 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
         self._send_json(
             401 if not user else 403,
             {"error": "authentication required" if not user else "admin access required"},
-            {"WWW-Authenticate": 'Basic realm="Certificate Updater"'} if not user else None,
         )
         return None
 
