@@ -11,6 +11,7 @@ Certificate Updater is a containerized automatic SSL/TLS certificate manager usi
 - **Non-root container** execution with configurable UID/GID
 - **In-container sync loop** for automatic renewals with direct container logs
 - **Web dashboard** for real-time certificate status monitoring
+- **Lightweight role-based web access** with viewer and admin users
 
 ## Quick Start
 
@@ -35,7 +36,10 @@ Certificate Updater is a containerized automatic SSL/TLS certificate manager usi
    docker compose up -d
    ```
    This pulls `ghcr.io/dam-pav/cert-updater:latest` and `ghcr.io/dam-pav/cert-updater-web:latest`.
-5. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below)
+5. Sign in to the dashboard with the default admin credentials and replace them:
+   - Username: `admin`
+   - Password: `admin`
+6. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below)
 
 ## Web Dashboard
 
@@ -50,12 +54,46 @@ The dashboard displays:
 - **Domain table**: Domain name, target host, DNS provider, status, last checked, last updated, and next renewal date
 - **Auto-refresh**: Updates every 60 seconds
 - **Manual refresh**: Click the floating refresh button
+- **Role-based access**: `viewer` users can view certificate status; `admin` users can also edit `settings.yml`
 
 Customize the port with the `WEB_PORT` environment variable:
 
 ```
 WEB_PORT=80
 ```
+
+### Dashboard Users
+
+Dashboard credentials are stored in `${DATA_DIR}/cert-updater/config/users.json`. If this file does not exist, the service creates a default admin user with username `admin` and password `admin`.
+
+Replace the default password before exposing the dashboard beyond a trusted local network. Passwords are stored as PBKDF2-SHA256 hashes:
+
+```bash
+docker exec -it cert-updater /cert-updater/bin/hash-password.py
+```
+
+Then edit `${DATA_DIR}/cert-updater/config/users.json`:
+
+```json
+{
+  "users": [
+    {
+      "username": "admin",
+      "password_hash": "pbkdf2_sha256$260000$...",
+      "role": "admin"
+    },
+    {
+      "username": "viewer",
+      "password_hash": "pbkdf2_sha256$260000$...",
+      "role": "viewer"
+    }
+  ]
+}
+```
+
+Supported roles are:
+- `viewer`: can authenticate and view certificate status
+- `admin`: can view status and read/write `settings.yml` from the dashboard
 
 ## Portainer
 
@@ -122,7 +160,7 @@ After first run, the following directories are created under `${DATA_DIR}/cert-u
 
 ```
 cert-updater/
-├── config/          # settings.yml configuration
+├── config/          # settings.yml configuration and users.json credentials
 ├── state/           # acme.sh state and certificates
 ├── export/          # Exported certificates (key.pem, cert.pem)
 ├── ssh/             # SSH keys (auto-generated)

@@ -1,0 +1,15 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password_hash": "pbkdf2_sha256$260000$change-this-default-salt$5Xa0ABJkyQhoIT42gvlKILiG/AS9Gu8iv5yQe39eGIw=",
+      "role": "admin",
+      "must_change_password": true
+    },
+    {
+      "username": "viewer",
+      "password_hash": "replace-with-a-hash-from-bin/hash-password.py",
+      "role": "viewer"
+    }
+  ]
+}
