@@ -180,9 +180,13 @@ Place your `settings.yml` in `${DATA_DIR}/cert-updater/config/`. See `config/set
 
 ### Structure
 
-The configuration has two sections: `hosts` (deployment targets) and `domains` (certificates).
+The configuration has three top-level sections: `webui` (dashboard options), `hosts` (deployment targets), and `domains` (certificates). The `webui` section is optional.
 
 ```yaml
+# Web dashboard options
+webui:
+  subpath: ""                      # Optional; use certs to serve the UI at /certs/
+
 # Host definitions - reusable across domains
 hosts:
   router:                         # Host identifier (referenced by domains)

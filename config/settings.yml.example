@@ -1,4 +1,8 @@
 ```yaml
+# Web dashboard options
+webui:
+  subpath: ""              # optional; use certs to serve the UI at /certs/
+
 # Host definitions - referenced by domains
 hosts:
   router:

@@ -8,6 +8,7 @@ import hmac
 import http.server
 import json
 import os
+import re
 import secrets
 import tempfile
 import yaml
@@ -423,6 +424,10 @@ def validate_against_schema(data, schema):
         elif expected == "string" and not isinstance(data, str):
             errors.append(f"Expected string, got {type(data).__name__}")
             return errors
+
+    if schema.get("type") == "string" and "pattern" in schema and isinstance(data, str):
+        if not re.fullmatch(schema["pattern"], data):
+            errors.append(f"Value must match pattern: {schema['pattern']}")
 
     # Required fields (for objects)
     if schema.get("type") == "object" and "required" in schema:

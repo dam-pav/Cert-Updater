@@ -4,6 +4,15 @@
   "type": "object",
   "required": ["hosts", "domains"],
   "properties": {
+    "webui": {
+      "type": "object",
+      "properties": {
+        "subpath": {
+          "type": "string",
+          "pattern": "^$|^[A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)*$"
+        }
+      }
+    },
     "hosts": {
       "type": "object",
       "additionalProperties": {
