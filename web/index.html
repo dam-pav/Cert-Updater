@@ -73,6 +73,11 @@
             box-shadow: 0 8px 18px rgba(0, 93, 255, 0.16);
         }
 
+        .title-logo-link {
+            display: inline-flex;
+            border-radius: 10px;
+        }
+
         .last-sync {
             display: inline-flex;
             align-items: center;
@@ -874,7 +879,9 @@
     <div class="login-shell" id="loginShell">
         <form class="login-panel" id="loginForm">
             <h1>
-                <img class="title-logo" src="dam-pav.logo.svg" alt="DAM PAV">
+                <a class="title-logo-link" href="https://github.com/dam-pav/Cert-Updater/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Open Certificate Updater README">
+                    <img class="title-logo" src="dam-pav.logo.svg" alt="DAM PAV">
+                </a>
                 Certificate Updater
             </h1>
             <div class="login-field">
@@ -893,7 +900,9 @@
     <div class="container" id="dashboardShell" hidden>
         <header>
             <h1>
-                <img class="title-logo" src="dam-pav.logo.svg" alt="DAM PAV">
+                <a class="title-logo-link" href="https://github.com/dam-pav/Cert-Updater/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Open Certificate Updater README">
+                    <img class="title-logo" src="dam-pav.logo.svg" alt="DAM PAV">
+                </a>
                 Certificate Updater Status
             </h1>
             <div class="last-sync" id="lastSync">
