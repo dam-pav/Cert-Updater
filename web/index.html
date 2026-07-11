@@ -1174,8 +1174,26 @@
             return token ? { ...extraHeaders, Authorization: `Basic ${token}` } : extraHeaders;
         }
 
+        function appBaseUrl() {
+            const path = window.location.pathname;
+            const lastSegment = path.slice(path.lastIndexOf('/') + 1);
+            const basePath = path.endsWith('/')
+                ? path
+                : lastSegment.includes('.')
+                    ? path.slice(0, path.lastIndexOf('/') + 1)
+                    : `${path}/`;
+            return new URL(basePath || '/', window.location.origin);
+        }
+
         function appUrl(path) {
-            return new URL(path.replace(/^\/+/, ''), window.location.href).toString();
+            return new URL(path.replace(/^\/+/, ''), appBaseUrl()).toString();
+        }
+
+        function updateStaticAssetUrls() {
+            document.getElementById('settingsSchemaAsset').href = appUrl('settings.schema.json');
+            document.querySelectorAll('img.title-logo').forEach(img => {
+                img.src = appUrl('dam-pav.logo.svg');
+            });
         }
 
         function authFetch(url, options = {}) {
@@ -1507,6 +1525,7 @@
             }
         });
 
+        updateStaticAssetUrls();
         initializeDashboard();
     </script>
 
@@ -1543,7 +1562,7 @@
         if (SETTINGS_SCHEMA) return Promise.resolve(SETTINGS_SCHEMA);
         if (schemaLoadPromise) return schemaLoadPromise;
 
-        const schemaUrl = document.getElementById('settingsSchemaAsset').href;
+        const schemaUrl = appUrl('settings.schema.json');
         schemaLoadPromise = fetch(schemaUrl, { cache: 'no-store' })
             .then(res => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);

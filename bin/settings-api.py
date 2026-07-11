@@ -274,6 +274,16 @@ def role_allows(user, required_role):
     return False
 
 
+def normalized_path(raw_path):
+    path = urlparse(raw_path).path
+    api_index = path.find("/api/")
+    if api_index >= 0:
+        return path[api_index:]
+    if path.endswith("/status.json"):
+        return "/status.json"
+    return path
+
+
 class SettingsHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # suppress logs
@@ -307,7 +317,7 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
         return None
 
     def do_GET(self):
-        path = urlparse(self.path).path
+        path = normalized_path(self.path)
         if path == "/api/auth/me":
             user = self._require_role("viewer")
             if not user:
@@ -342,7 +352,7 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def do_POST(self):
-        path = urlparse(self.path).path
+        path = normalized_path(self.path)
         if path == "/api/settings/write":
             if not self._require_role("admin"):
                 return
