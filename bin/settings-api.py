@@ -9,6 +9,7 @@ import http.server
 import json
 import os
 import secrets
+import tempfile
 import yaml
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -94,16 +95,149 @@ def ensure_credentials_file():
 
 def load_credentials():
     ensure_credentials_file()
-    try:
-        with open(CREDENTIALS_PATH, "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        data = default_credentials()
-
+    data = load_credentials_data()
     users = data.get("users", [])
     if not isinstance(users, list):
         return []
     return [user for user in users if isinstance(user, dict)]
+
+
+def load_credentials_data():
+    ensure_credentials_file()
+    try:
+        with open(CREDENTIALS_PATH, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return default_credentials()
+
+
+def save_credentials_data(data):
+    directory = os.path.dirname(CREDENTIALS_PATH) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(prefix=".users.", suffix=".json", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        os.chmod(temp_path, 0o600)
+        os.replace(temp_path, CREDENTIALS_PATH)
+    except Exception:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def public_user(user):
+    return {
+        "username": user.get("username", ""),
+        "role": user.get("role") if user.get("role") in ("viewer", "admin") else "viewer",
+        "must_change_password": bool(user.get("must_change_password")),
+    }
+
+
+def users_for_actor(actor):
+    users = load_credentials()
+    if actor.get("role") == "admin":
+        return [public_user(user) for user in users]
+    return [public_user(user) for user in users if user.get("username") == actor.get("username")]
+
+
+def validate_password_change(user):
+    password = user.get("password", "")
+    password_confirm = user.get("password_confirm", "")
+    if not isinstance(password, str) or not password:
+        return "Password is required."
+    if password != password_confirm:
+        return "Password confirmation does not match."
+    return None
+
+
+def update_users(actor, incoming_users):
+    if not isinstance(incoming_users, list):
+        return None, "Request must include a users array."
+
+    credentials = load_credentials_data()
+    existing_users = [user for user in credentials.get("users", []) if isinstance(user, dict)]
+    existing_by_name = {user.get("username"): user for user in existing_users}
+
+    if actor.get("role") != "admin":
+        if len(incoming_users) != 1:
+            return None, "Viewer users can only update their own password."
+        incoming = incoming_users[0]
+        if not isinstance(incoming, dict) or incoming.get("username") != actor.get("username"):
+            return None, "Viewer users can only update their own password."
+        current = existing_by_name.get(actor.get("username"))
+        if not current:
+            return None, "Current user was not found."
+        password_error = validate_password_change(incoming)
+        if password_error:
+            return None, password_error
+        current["password_hash"] = hash_password(incoming["password"])
+        current["must_change_password"] = False
+        save_credentials_data({"users": existing_users})
+        return users_for_actor(actor), None
+
+    next_users = []
+    seen = set()
+    for index, incoming in enumerate(incoming_users):
+        if not isinstance(incoming, dict):
+            return None, f"User entry {index + 1} must be an object."
+
+        username = incoming.get("username", "")
+        role = incoming.get("role", "")
+        if not isinstance(username, str) or not username.strip():
+            return None, f"User entry {index + 1} must include a username."
+        username = username.strip()
+        if username in seen:
+            return None, f"Duplicate username: {username}"
+        seen.add(username)
+        if role not in ("viewer", "admin"):
+            return None, f"Role for {username} must be viewer or admin."
+
+        existing = existing_by_name.get(username, {})
+        password = incoming.get("password", "")
+        password_hash = existing.get("password_hash")
+        must_change_password = bool(existing.get("must_change_password"))
+        if password:
+            password_error = validate_password_change(incoming)
+            if password_error:
+                return None, f"{username}: {password_error}"
+            password_hash = hash_password(password)
+            must_change_password = False
+        elif not password_hash:
+            return None, f"{username}: Password is required for new users."
+
+        next_users.append({
+            "username": username,
+            "password_hash": password_hash,
+            "role": role,
+            "must_change_password": must_change_password,
+        })
+
+    if not next_users:
+        return None, "At least one user is required."
+    if not any(user.get("role") == "admin" for user in next_users):
+        return None, "At least one admin user is required."
+    next_by_name = {user.get("username"): user for user in next_users}
+    if actor.get("username") not in next_by_name:
+        return None, "The signed-in user cannot be removed."
+
+    save_credentials_data({"users": next_users})
+    updated_actor = public_user(next_by_name[actor.get("username")])
+    if updated_actor.get("role") == "admin":
+        return [public_user(user) for user in next_users], None
+    return [updated_actor], None
+
+
+def read_json_body(handler):
+    length = int(handler.headers.get("Content-Length", 0))
+    body = handler.rfile.read(length).decode() if length else ""
+    try:
+        return json.loads(body or "{}"), None
+    except json.JSONDecodeError as e:
+        return None, f"Invalid JSON: {e}"
 
 
 def find_authenticated_user(header):
@@ -179,6 +313,11 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
             if not user:
                 return
             self._send_json(200, user)
+        elif path == "/api/users":
+            user = self._require_role("viewer")
+            if not user:
+                return
+            self._send_json(200, {"users": users_for_actor(user)})
         elif path in ("/api/status", "/status.json"):
             if not self._require_role("viewer"):
                 return
@@ -239,6 +378,27 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
                 })
             except Exception as e:
                 self._send_json(500, {"error": f"Failed to write file: {e}"})
+        elif path == "/api/users/write":
+            user = self._require_role("viewer")
+            if not user:
+                return
+
+            payload, error = read_json_body(self)
+            if error:
+                self._send_json(400, {"error": error})
+                return
+
+            users, error = update_users(user, payload.get("users"))
+            if error:
+                self._send_json(400, {"error": error})
+                return
+
+            self._send_json(200, {
+                "status": "ok",
+                "message": "Users updated successfully",
+                "users": users,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
         else:
             self._send_json(404, {"error": "not found"})
 

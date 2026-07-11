@@ -380,6 +380,79 @@
             height: 18px;
         }
 
+        .users-table-wrap {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+
+        .users-table {
+            min-width: 640px;
+        }
+
+        .users-table th,
+        .users-table td {
+            vertical-align: top;
+        }
+
+        .users-table input,
+        .users-table select {
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font: inherit;
+            padding: 0.55rem 0.65rem;
+            outline: none;
+        }
+
+        .users-table input:focus,
+        .users-table select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .users-table input[readonly] {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+        }
+
+        .password-stack,
+        .role-stack {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .remove-user-btn {
+            background: transparent;
+            border: 1px solid rgba(220, 38, 38, 0.28);
+            border-radius: 8px;
+            color: var(--status-expired);
+            cursor: pointer;
+            font-size: 0.82rem;
+            padding: 0.45rem 0.65rem;
+        }
+
+        .remove-user-btn:hover {
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .user-status {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-left: auto;
+        }
+
+        .user-status.success {
+            color: var(--status-valid);
+        }
+
+        .user-status.error {
+            color: var(--status-expired);
+        }
+
         .modal-overlay {
             display: none;
             position: fixed;
@@ -831,6 +904,14 @@
 
         <div class="menu-bar">
             <div class="auth-status" id="authStatus">Authenticating...</div>
+            <button class="menu-btn" id="manageUsersBtn" onclick="openUserManager()" title="Manage users" hidden>
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                Users
+            </button>
             <button class="menu-btn" id="editSettingsBtn" onclick="openSettingsEditor()" title="Edit settings.yml" hidden>
                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -933,9 +1014,56 @@
         </div>
     </div>
 
+    <!-- User Management Modal -->
+    <div class="modal-overlay" id="usersModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Users</h2>
+                <button class="modal-close" onclick="closeUserManager()" title="Close">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="editor-toolbar">
+                    <button id="addUserBtn" onclick="addUserRow()">Add User</button>
+                    <button onclick="loadUsers()" id="reloadUsersBtn">Reload</button>
+                    <span class="user-status" id="usersStatus"></span>
+                </div>
+                <div class="users-table-wrap">
+                    <table class="users-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Password</th>
+                                <th>Role</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable">
+                            <tr>
+                                <td colspan="3">
+                                    <div class="loading">
+                                        <div class="spinner"></div>
+                                        Loading users...
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeUserManager()">Cancel</button>
+                <button class="btn-save" id="saveUsersBtn" onclick="saveUsers()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let CURRENT_USER = null;
         let STATUS_REFRESH_TIMER = null;
+        let USERS = [];
         const AUTH_STORAGE_KEY = 'cert-updater-basic-auth';
 
         function escapeHtml(str) {
@@ -1056,10 +1184,12 @@
         function updateAuthUi() {
             const authStatus = document.getElementById('authStatus');
             const editBtn = document.getElementById('editSettingsBtn');
+            const usersBtn = document.getElementById('manageUsersBtn');
 
             if (!CURRENT_USER) {
                 authStatus.textContent = 'Not signed in';
                 editBtn.hidden = true;
+                usersBtn.hidden = true;
                 return;
             }
 
@@ -1068,6 +1198,190 @@
                 : '';
             authStatus.innerHTML = `Signed in as ${escapeHtml(CURRENT_USER.username)} (${escapeHtml(CURRENT_USER.role)})${warning}`;
             editBtn.hidden = CURRENT_USER.role !== 'admin';
+            usersBtn.hidden = false;
+        }
+
+        function canManageAllUsers() {
+            return CURRENT_USER && CURRENT_USER.role === 'admin';
+        }
+
+        function setUsersStatus(message, type = '') {
+            const status = document.getElementById('usersStatus');
+            status.textContent = message;
+            status.className = `user-status ${type}`.trim();
+        }
+
+        async function openUserManager() {
+            if (!CURRENT_USER) return;
+            document.getElementById('usersModal').classList.add('active');
+            document.getElementById('addUserBtn').hidden = !canManageAllUsers();
+            await loadUsers();
+        }
+
+        function closeUserManager() {
+            document.getElementById('usersModal').classList.remove('active');
+            setUsersStatus('');
+        }
+
+        async function loadUsers() {
+            const tbody = document.getElementById('usersTable');
+            const saveBtn = document.getElementById('saveUsersBtn');
+            saveBtn.disabled = true;
+            setUsersStatus('Loading...');
+            tbody.innerHTML = `
+                <tr><td colspan="3">
+                    <div class="loading"><div class="spinner"></div>Loading users...</div>
+                </td></tr>`;
+
+            try {
+                const res = await authFetch('/api/users', { cache: 'no-store' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                const data = await res.json();
+                USERS = (data.users || []).map(user => ({ ...user, isNew: false }));
+                renderUsers();
+                setUsersStatus(canManageAllUsers() ? 'Loaded' : 'Password changes only', 'success');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="3"><div class="error-msg">Failed to load users: ${escapeHtml(err.message)}</div></td></tr>`;
+                setUsersStatus('Load failed', 'error');
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        function renderUsers() {
+            const tbody = document.getElementById('usersTable');
+            const canManageAll = canManageAllUsers();
+
+            if (!USERS.length) {
+                tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><p>No users configured</p></div></td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = USERS.map((user, index) => {
+                const usernameReadonly = !canManageAll || !user.isNew;
+                const passwordPlaceholder = user.isNew || !canManageAll ? 'New password' : 'Leave unchanged';
+                const removeButton = canManageAll
+                    ? `<button class="remove-user-btn" type="button" onclick="removeUserRow(${index})">Remove</button>`
+                    : '';
+                const roleControl = canManageAll
+                    ? `<select class="user-role">
+                            <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>viewer</option>
+                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>admin</option>
+                       </select>`
+                    : `<input class="user-role" type="text" value="${escapeHtml(user.role)}" readonly>`;
+
+                return `
+                    <tr class="user-row" data-index="${index}" data-new="${user.isNew ? 'true' : 'false'}">
+                        <td>
+                            <input class="user-username" type="text" value="${escapeHtml(user.username)}" ${usernameReadonly ? 'readonly' : ''} autocomplete="username" required>
+                        </td>
+                        <td>
+                            <div class="password-stack">
+                                <input class="user-password" type="password" placeholder="${passwordPlaceholder}" autocomplete="new-password">
+                                <input class="user-password-confirm" type="password" placeholder="Confirm password" autocomplete="new-password">
+                            </div>
+                        </td>
+                        <td>
+                            <div class="role-stack">
+                                ${roleControl}
+                                ${removeButton}
+                            </div>
+                        </td>
+                    </tr>`;
+            }).join('');
+        }
+
+        function addUserRow() {
+            if (!canManageAllUsers()) return;
+            USERS.push({ username: '', role: 'viewer', must_change_password: false, isNew: true });
+            renderUsers();
+            setUsersStatus('New user added');
+        }
+
+        function removeUserRow(index) {
+            if (!canManageAllUsers()) return;
+            USERS.splice(index, 1);
+            renderUsers();
+            setUsersStatus('User removed');
+        }
+
+        function collectUserRows() {
+            const rows = [...document.querySelectorAll('#usersTable .user-row')];
+            const users = [];
+            let selfPassword = null;
+
+            for (const row of rows) {
+                const username = row.querySelector('.user-username').value.trim();
+                const role = row.querySelector('.user-role').value;
+                const password = row.querySelector('.user-password').value;
+                const passwordConfirm = row.querySelector('.user-password-confirm').value;
+                const isNew = row.dataset.new === 'true';
+
+                if (!username) throw new Error('Every user needs a username.');
+                if (!['viewer', 'admin'].includes(role)) throw new Error(`${username}: choose viewer or admin.`);
+                if ((password || passwordConfirm) && password !== passwordConfirm) {
+                    throw new Error(`${username}: password confirmation does not match.`);
+                }
+                if ((isNew || !canManageAllUsers()) && !password) {
+                    throw new Error(`${username}: enter and confirm a new password.`);
+                }
+
+                const user = { username, role };
+                if (password || passwordConfirm) {
+                    user.password = password;
+                    user.password_confirm = passwordConfirm;
+                    if (username === CURRENT_USER.username) {
+                        selfPassword = password;
+                    }
+                }
+                users.push(user);
+            }
+
+            if (canManageAllUsers() && !users.some(user => user.role === 'admin')) {
+                throw new Error('At least one admin user is required.');
+            }
+
+            return { users, selfPassword };
+        }
+
+        async function saveUsers() {
+            const saveBtn = document.getElementById('saveUsersBtn');
+            let collected;
+
+            try {
+                collected = collectUserRows();
+            } catch (err) {
+                setUsersStatus(err.message, 'error');
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            setUsersStatus('Saving...');
+
+            try {
+                const res = await authFetch('/api/users/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ users: collected.users })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+                if (collected.selfPassword) {
+                    setAuthToken(toBase64(`${CURRENT_USER.username}:${collected.selfPassword}`));
+                }
+                await loadCurrentUser();
+                document.getElementById('addUserBtn').hidden = !canManageAllUsers();
+                USERS = (data.users || []).map(user => ({ ...user, isNew: false }));
+                renderUsers();
+                setUsersStatus(data.message || 'Saved', 'success');
+            } catch (err) {
+                setUsersStatus(`Save failed: ${err.message}`, 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
+            }
         }
 
         async function loadCurrentUser() {

@@ -66,7 +66,9 @@ WEB_PORT=80
 
 Dashboard credentials are stored in `${DATA_DIR}/cert-updater/config/users.json`. If this file does not exist, the service creates a default admin user with username `admin` and password `admin`.
 
-Replace the default password before exposing the dashboard beyond a trusted local network. Passwords are stored as PBKDF2-SHA256 hashes:
+Replace the default password before exposing the dashboard beyond a trusted local network. Sign in as an admin, open **Users**, and enter the new password twice before saving. Admin users can add users, remove users, change roles, and reset passwords. Viewer users can open **Users** only for their own row and can change only their own password.
+
+Passwords are stored as PBKDF2-SHA256 hashes. If you need to edit `${DATA_DIR}/cert-updater/config/users.json` manually, generate a hash first:
 
 ```bash
 docker exec -it cert-updater /cert-updater/bin/hash-password.py
