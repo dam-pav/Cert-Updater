@@ -32,15 +32,15 @@ Certificate Updater is a containerized automatic SSL/TLS certificate manager usi
    cp config/settings.yml.example ${DATA_DIR}/cert-updater/config/settings.yml
    nano ${DATA_DIR}/cert-updater/config/settings.yml
    ```
-4. Start the stack:
+4. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below). The worker runs an initial sync when it starts, so install the key before starting the full stack if you want the first deployment to succeed.
+5. Start the stack:
    ```bash
    docker compose up -d
    ```
    This pulls `ghcr.io/dam-pav/cert-updater:latest` and `ghcr.io/dam-pav/cert-updater-web:latest`.
-5. Sign in to the dashboard with the default admin credentials and replace them:
+6. Sign in to the dashboard with the default admin credentials and replace them:
    - Username: `admin`
    - Password: `admin`
-6. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below)
 
 ## Web Dashboard
 
@@ -57,7 +57,7 @@ The dashboard displays:
 - **Manual sync**: Admin users can request an immediate backend sync from the dashboard
 - **Auto-refresh**: Updates every 60 seconds
 - **Manual refresh**: Click the floating refresh button
-- **Role-based access**: `viewer` users can view certificate status; `admin` users can also edit `settings.yml`
+- **Role-based access**: `viewer` users can view certificate status, host summaries, the SSH key helper, and their own user row; `admin` users can also edit `settings.yml`, manage all users, and request manual syncs
 
 Customize the port with the `WEB_PORT` environment variable:
 
@@ -97,8 +97,8 @@ Then edit `${DATA_DIR}/cert-updater/config/users.json`:
 ```
 
 Supported roles are:
-- `viewer`: can authenticate and view certificate status
-- `admin`: can view status and read/write `settings.yml` from the dashboard
+- `viewer`: can authenticate, view certificate status and host summaries, open the SSH key helper, and change their own password
+- `admin`: can do everything a viewer can, plus read/write `settings.yml`, manage all users, and request manual syncs from the dashboard
 
 ## Portainer
 
@@ -169,7 +169,7 @@ The published container images include runnable manifests for:
 | x86_64 / AMD64 | `linux/amd64` |
 | ARM64 / AArch64 | `linux/arm64` |
 
-This means you can run the stack on your Raspberry Pi. This has been tested with Ubuntu server running on RPI 3B. Please report other setups both if your deployment is successful or not. 
+This means you can run the stack on a Raspberry Pi with a 64-bit OS. This has been tested with Ubuntu Server 64-bit running on Raspberry Pi 3B. Please report other setups, whether your deployment is successful or not.
 
 Other Linux architectures may work with a local image build if the Alpine packages used by the Dockerfiles are available for that platform.
 
@@ -366,7 +366,7 @@ Use `transfer: scp` in `settings.yml` for minimal systems without sftp-server.
 acme.sh skips renewal if the certificate is not due (>30 days remaining). This is normal behavior. Force renewal with:
 
 ```bash
-docker exec cert-updater acme.sh --renew -d example.com --force
+docker exec cert-updater acme.sh --renew -d example.com --ecc --force
 ```
 
 ### Container Keeps Restarting
