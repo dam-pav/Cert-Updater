@@ -53,6 +53,7 @@ http://localhost:8080
 The dashboard displays:
 - **Summary cards**: Total, valid, expired, and unknown certificates
 - **Domain table**: Domain name, target host, DNS provider, status, last checked, last updated, and next renewal date
+- **SSH Key helper**: Shows the generated public key and copyable setup commands for configured target hosts
 - **Auto-refresh**: Updates every 60 seconds
 - **Manual refresh**: Click the floating refresh button
 - **Role-based access**: `viewer` users can view certificate status; `admin` users can also edit `settings.yml`
@@ -262,11 +263,15 @@ See the [acme.sh DNS API documentation](https://github.com/acmesh-official/acme.
 
 ## Target Host SSH Setup
 
-The init container automatically generates an SSH key pair on first run. You need to add the public key to each target host.
+The init container automatically generates an SSH key pair on first run. The private key stays in `${DATA_DIR}/cert-updater/ssh/id_ed25519` and is mounted read-only into the `cert-updater` container. You need to add the matching public key to each target host that will receive certificates.
+
+The commands in this section are run from your Docker host (or from any admin machine that can SSH to the target host), not from the target host itself. They connect to the target host and append the generated public key to the target user's authorized keys file.
 
 ### 1. Get the Public Key
 
-After first run, view the generated public key:
+After signing in to the dashboard, open **SSH Key** to copy the generated public key and host-specific setup commands.
+
+You can also view the generated public key on the Docker host:
 
 ```bash
 cat ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
@@ -278,7 +283,7 @@ Or check the `cert-updater-init` container logs:
 docker logs cert-updater-init
 ```
 
-### 2. Add to Target Host
+### 2. Add to Target Host from the Docker Host
 
 #### Standard Linux (OpenSSH)
 
@@ -286,7 +291,7 @@ docker logs cert-updater-init
 # Copy key to target
 ssh-copy-id -i ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub user@target-host
 
-# Or manually
+# Or manually from the Docker host
 ssh user@target-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ```
 
@@ -307,6 +312,8 @@ ssh user@router "chmod 600 ~/.ssh/authorized_keys"
 > **Important**: Dropbear rejects keys from world-writable files. Ensure permissions are `600`.
 
 ### 3. Test Connection
+
+Run the test from the Docker host:
 
 ```bash
 ssh -i ${DATA_DIR}/cert-updater/ssh/id_ed25519 user@target-host "echo success"

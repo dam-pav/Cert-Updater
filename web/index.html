@@ -229,6 +229,72 @@
             overflow-wrap: anywhere;
         }
 
+        .copy-block {
+            width: 100%;
+            min-height: 7rem;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            padding: 0.85rem;
+            resize: vertical;
+        }
+
+        .ssh-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .ssh-field {
+            display: grid;
+            gap: 0.4rem;
+        }
+
+        .ssh-field label {
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+
+        .ssh-field select {
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font: inherit;
+            padding: 0.55rem 0.65rem;
+            outline: none;
+        }
+
+        .ssh-field select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .ssh-note {
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            line-height: 1.5;
+        }
+
+        .ssh-status {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-left: auto;
+        }
+
+        .ssh-status.success {
+            color: var(--status-valid);
+        }
+
+        .ssh-status.error {
+            color: var(--status-expired);
+        }
+
         .provider-badge {
             display: inline-block;
             background: rgba(99, 102, 241, 0.12);
@@ -922,6 +988,15 @@
                 </svg>
                 Users
             </button>
+            <button class="menu-btn" id="sshSetupBtn" onclick="openSshSetup()" title="Show SSH public key and target host commands" hidden>
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M15.75 7.5a3.75 3.75 0 1 1-3.3-3.72"/>
+                    <path d="M13.5 9.75 21 2.25"/>
+                    <path d="M16.5 2.25H21v4.5"/>
+                    <path d="M6.75 15.75v2.25m4.5-2.25v2.25m-7.5 3.75h10.5a1.5 1.5 0 0 0 1.5-1.5v-6a1.5 1.5 0 0 0-1.5-1.5H3.75a1.5 1.5 0 0 0-1.5 1.5v6a1.5 1.5 0 0 0 1.5 1.5Z"/>
+                </svg>
+                SSH Key
+            </button>
             <button class="menu-btn" id="editSettingsBtn" onclick="openSettingsEditor()" title="Edit settings.yml" hidden>
                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -1070,10 +1145,51 @@
         </div>
     </div>
 
+    <!-- SSH Setup Modal -->
+    <div class="modal-overlay" id="sshModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>SSH Key</h2>
+                <button class="modal-close" onclick="closeSshSetup()" title="Close">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="editor-toolbar">
+                    <button onclick="copySshPublicKey()">Copy Public Key</button>
+                    <button onclick="copySshCommand()">Copy Command</button>
+                    <button onclick="loadSshPublicKey()" id="reloadSshBtn">Reload</button>
+                    <span class="ssh-status" id="sshStatus"></span>
+                </div>
+                <div class="ssh-grid">
+                    <div class="ssh-field">
+                        <label for="sshPublicKey">Generated public key</label>
+                        <textarea class="copy-block" id="sshPublicKey" readonly placeholder="Loading SSH public key..."></textarea>
+                    </div>
+                    <div class="ssh-field">
+                        <label for="sshHostSelect">Target host command</label>
+                        <select id="sshHostSelect" onchange="renderSshCommands()"></select>
+                        <textarea class="copy-block" id="sshCommand" readonly></textarea>
+                    </div>
+                    <p class="ssh-note">
+                        Run the command from your Docker host or any machine that can SSH to the target host. The command appends the generated public key to the target user's authorized keys file; deployments then use the matching private key from inside the cert-updater container.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeSshSetup()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let CURRENT_USER = null;
         let STATUS_REFRESH_TIMER = null;
         let USERS = [];
+        let HOSTS = [];
+        let SSH_PUBLIC_KEY = '';
         const AUTH_STORAGE_KEY = 'cert-updater-basic-auth';
 
         function escapeHtml(str) {
@@ -1217,11 +1333,13 @@
             const authStatus = document.getElementById('authStatus');
             const editBtn = document.getElementById('editSettingsBtn');
             const usersBtn = document.getElementById('manageUsersBtn');
+            const sshBtn = document.getElementById('sshSetupBtn');
 
             if (!CURRENT_USER) {
                 authStatus.textContent = 'Not signed in';
                 editBtn.hidden = true;
                 usersBtn.hidden = true;
+                sshBtn.hidden = true;
                 return;
             }
 
@@ -1231,6 +1349,7 @@
             authStatus.innerHTML = `Signed in as ${escapeHtml(CURRENT_USER.username)} (${escapeHtml(CURRENT_USER.role)})${warning}`;
             editBtn.hidden = CURRENT_USER.role !== 'admin';
             usersBtn.hidden = false;
+            sshBtn.hidden = false;
         }
 
         function canManageAllUsers() {
@@ -1416,6 +1535,112 @@
             }
         }
 
+        function setSshStatus(message, type = '') {
+            const status = document.getElementById('sshStatus');
+            status.textContent = message;
+            status.className = `ssh-status ${type}`.trim();
+        }
+
+        function shellQuote(value) {
+            return `'${String(value).replace(/'/g, `'\\''`)}'`;
+        }
+
+        function renderSshHostOptions() {
+            const select = document.getElementById('sshHostSelect');
+            const previous = select.value;
+            const options = HOSTS.length
+                ? HOSTS.map(host => ({
+                    value: host.url || '',
+                    label: `${host.name || host.url || 'target'} (${host.url || 'missing URL'})`
+                }))
+                : [{ value: 'user@target-host', label: 'user@target-host' }];
+
+            select.innerHTML = options.map(option =>
+                `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`
+            ).join('');
+
+            if ([...select.options].some(option => option.value === previous)) {
+                select.value = previous;
+            }
+        }
+
+        function renderSshCommands() {
+            const key = SSH_PUBLIC_KEY.trim();
+            const target = document.getElementById('sshHostSelect').value || 'user@target-host';
+            const commandEl = document.getElementById('sshCommand');
+
+            if (!key) {
+                commandEl.value = 'Load the generated public key first.';
+                return;
+            }
+
+            commandEl.value = [
+                '# Standard Linux / OpenSSH',
+                `printf '%s\\n' ${shellQuote(key)} | ssh ${shellQuote(target)} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"`,
+                '',
+                '# OpenWrt / ASUS-WRT Merlin with Dropbear root login',
+                `printf '%s\\n' ${shellQuote(key)} | ssh ${shellQuote(target)} "mkdir -p /etc/dropbear && cat >> /etc/dropbear/authorized_keys && chmod 600 /etc/dropbear/authorized_keys"`,
+                '',
+                '# Connection test after installing the key',
+                `ssh ${shellQuote(target)} "echo success"`
+            ].join('\n');
+        }
+
+        async function loadSshPublicKey() {
+            const keyEl = document.getElementById('sshPublicKey');
+            const reloadBtn = document.getElementById('reloadSshBtn');
+            reloadBtn.disabled = true;
+            setSshStatus('Loading...');
+
+            try {
+                const res = await authFetch('api/ssh/public-key', { cache: 'no-store' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                SSH_PUBLIC_KEY = data.public_key || '';
+                keyEl.value = SSH_PUBLIC_KEY;
+                renderSshHostOptions();
+                renderSshCommands();
+                setSshStatus('Loaded', 'success');
+            } catch (err) {
+                keyEl.value = '';
+                SSH_PUBLIC_KEY = '';
+                renderSshCommands();
+                setSshStatus(`Load failed: ${err.message}`, 'error');
+            } finally {
+                reloadBtn.disabled = false;
+            }
+        }
+
+        async function openSshSetup() {
+            if (!CURRENT_USER) return;
+            document.getElementById('sshModal').classList.add('active');
+            renderSshHostOptions();
+            await loadSshPublicKey();
+        }
+
+        function closeSshSetup() {
+            document.getElementById('sshModal').classList.remove('active');
+            setSshStatus('');
+        }
+
+        async function writeClipboard(text, statusMessage) {
+            if (!text) return;
+            try {
+                await navigator.clipboard.writeText(text);
+                setSshStatus(statusMessage, 'success');
+            } catch {
+                setSshStatus('Clipboard access denied', 'error');
+            }
+        }
+
+        function copySshPublicKey() {
+            writeClipboard(document.getElementById('sshPublicKey').value, 'Public key copied');
+        }
+
+        function copySshCommand() {
+            writeClipboard(document.getElementById('sshCommand').value, 'Command copied');
+        }
+
         async function loadCurrentUser() {
             const res = await authFetch('api/auth/me', { cache: 'no-store' });
             if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -1433,7 +1658,12 @@
                 syncEl.innerHTML = `<span class="dot"></span><span>Last sync: ${formatDateTime(data.last_sync)}</span>`;
 
                 renderTable(data.domains || []);
-                renderHostsTable(data.hosts || []);
+                HOSTS = data.hosts || [];
+                renderHostsTable(HOSTS);
+                if (document.getElementById('sshModal').classList.contains('active')) {
+                    renderSshHostOptions();
+                    renderSshCommands();
+                }
             } catch (err) {
                 document.getElementById('domainTable').innerHTML = `
                     <tr><td colspan="7"><div class="error-msg">Failed to load status: ${err.message}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;

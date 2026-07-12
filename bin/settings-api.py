@@ -19,6 +19,7 @@ SETTINGS_PATH = os.environ.get("SETTINGS_PATH", "/cert-updater/config/settings.y
 SCHEMA_PATH = os.environ.get("SETTINGS_SCHEMA_PATH", "/cert-updater/web/settings.schema.json")
 CREDENTIALS_PATH = os.environ.get("CREDENTIALS_PATH", "/cert-updater/config/users.json")
 STATUS_PATH = os.environ.get("STATUS_PATH", "/cert-updater/export/status.json")
+SSH_PUBLIC_KEY_PATH = os.environ.get("SSH_PUBLIC_KEY_PATH", "/cert-updater/home/.ssh/id_ed25519.pub")
 PORT = int(os.environ.get("SETTINGS_API_PORT", "8081"))
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "admin"
@@ -346,6 +347,17 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
                     self._send_text(200, f.read(), "text/yaml")
             except FileNotFoundError:
                 self._send_json(404, {"error": "settings.yml not found"})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+        elif path == "/api/ssh/public-key":
+            if not self._require_role("viewer"):
+                return
+            try:
+                with open(SSH_PUBLIC_KEY_PATH, "r") as f:
+                    public_key = f.read().strip()
+                self._send_json(200, {"public_key": public_key})
+            except FileNotFoundError:
+                self._send_json(404, {"error": "SSH public key not found"})
             except Exception as e:
                 self._send_json(500, {"error": str(e)})
         else:

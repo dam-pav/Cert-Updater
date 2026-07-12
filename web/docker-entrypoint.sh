@@ -77,6 +77,11 @@ write_api_locations() {
         proxy_set_header Content-Type \$content_type;
     }
 
+    location = ${prefix}/api/ssh/public-key {
+        proxy_pass http://cert-updater:8081;
+        proxy_set_header Authorization \$http_authorization;
+    }
+
     location = ${prefix}/api/settings/read {
         proxy_pass http://cert-updater:8081;
         proxy_set_header Authorization \$http_authorization;
