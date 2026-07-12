@@ -70,6 +70,16 @@ write_api_locations() {
         proxy_set_header Authorization \$http_authorization;
     }
 
+    location = ${prefix}/api/hosts {
+        proxy_pass http://cert-updater:8081;
+        proxy_set_header Authorization \$http_authorization;
+    }
+
+    location = ${prefix}/api/config {
+        proxy_pass http://cert-updater:8081;
+        proxy_set_header Authorization \$http_authorization;
+    }
+
     location = ${prefix}/api/users/write {
         limit_except POST { deny all; }
         proxy_pass http://cert-updater:8081;

@@ -146,6 +146,50 @@ def users_for_actor(actor):
     return [public_user(user) for user in users if user.get("username") == actor.get("username")]
 
 
+def load_public_config():
+    with open(SETTINGS_PATH, "r") as f:
+        data = yaml.safe_load(f) or {}
+
+    hosts = data.get("hosts", {}) if isinstance(data.get("hosts"), dict) else {}
+    domains = data.get("domains", []) if isinstance(data.get("domains"), list) else []
+    domain_counts = {}
+    public_domains = []
+
+    for domain in domains:
+        if not isinstance(domain, dict):
+            continue
+        host_name = domain.get("host", "") if isinstance(domain.get("host"), str) else ""
+        provider = ""
+        dns = domain.get("dns")
+        if isinstance(dns, dict) and isinstance(dns.get("provider"), str):
+            provider = dns.get("provider", "")
+        if host_name:
+            domain_counts[host_name] = domain_counts.get(host_name, 0) + 1
+        public_domains.append({
+            "name": domain.get("name", "") if isinstance(domain.get("name"), str) else "",
+            "host": host_name,
+            "provider": provider,
+        })
+
+    public_hosts = []
+    for name, host in hosts.items():
+        if not isinstance(host, dict):
+            continue
+        host_name = str(name)
+        public_hosts.append({
+            "name": host_name,
+            "url": host.get("url", "") if isinstance(host.get("url"), str) else "",
+            "transfer": host.get("transfer", "scp") if isinstance(host.get("transfer"), str) else "scp",
+            "reload": host.get("reload", "") if isinstance(host.get("reload"), str) else "",
+            "domain_count": domain_counts.get(host_name, 0),
+        })
+    return {"hosts": public_hosts, "domains": public_domains}
+
+
+def load_public_hosts():
+    return load_public_config()["hosts"]
+
+
 def validate_password_change(user):
     password = user.get("password", "")
     password_confirm = user.get("password_confirm", "")
@@ -329,6 +373,28 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
             if not user:
                 return
             self._send_json(200, {"users": users_for_actor(user)})
+        elif path == "/api/hosts":
+            if not self._require_role("viewer"):
+                return
+            try:
+                self._send_json(200, {"hosts": load_public_hosts()})
+            except FileNotFoundError:
+                self._send_json(404, {"error": "settings.yml not found"})
+            except yaml.YAMLError as e:
+                self._send_json(500, {"error": f"Invalid settings.yml: {e}"})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+        elif path == "/api/config":
+            if not self._require_role("viewer"):
+                return
+            try:
+                self._send_json(200, load_public_config())
+            except FileNotFoundError:
+                self._send_json(404, {"error": "settings.yml not found"})
+            except yaml.YAMLError as e:
+                self._send_json(500, {"error": f"Invalid settings.yml: {e}"})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
         elif path in ("/api/status", "/status.json"):
             if not self._require_role("viewer"):
                 return

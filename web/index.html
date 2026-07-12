@@ -1189,6 +1189,7 @@
         let STATUS_REFRESH_TIMER = null;
         let USERS = [];
         let HOSTS = [];
+        let SSH_HOSTS = [];
         let SSH_PUBLIC_KEY = '';
         const AUTH_STORAGE_KEY = 'cert-updater-basic-auth';
 
@@ -1548,8 +1549,9 @@
         function renderSshHostOptions() {
             const select = document.getElementById('sshHostSelect');
             const previous = select.value;
-            const options = HOSTS.length
-                ? HOSTS.map(host => ({
+            const sourceHosts = SSH_HOSTS.length ? SSH_HOSTS : HOSTS;
+            const options = sourceHosts.length
+                ? sourceHosts.map(host => ({
                     value: host.url || '',
                     label: `${host.name || host.url || 'target'} (${host.url || 'missing URL'})`
                 }))
@@ -1562,6 +1564,16 @@
             if ([...select.options].some(option => option.value === previous)) {
                 select.value = previous;
             }
+        }
+
+        async function loadConfiguredHosts() {
+            const res = await authFetch('api/config?t=' + Date.now(), { cache: 'no-store' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            SSH_HOSTS = data.hosts || [];
+            renderSshHostOptions();
+            renderSshCommands();
+            return SSH_HOSTS;
         }
 
         function renderSshCommands() {
@@ -1593,6 +1605,7 @@
             setSshStatus('Loading...');
 
             try {
+                await loadConfiguredHosts();
                 const res = await authFetch('api/ssh/public-key', { cache: 'no-store' });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -1648,17 +1661,50 @@
             updateAuthUi();
         }
 
+        function mergeDomainStatus(configDomains, statusDomains) {
+            const statusByName = new Map((statusDomains || []).map(domain => [domain.name, domain]));
+            return (configDomains || []).map(domain => {
+                const status = statusByName.get(domain.name) || {};
+                return {
+                    ...domain,
+                    status: status.status || 'unknown',
+                    last_checked: status.last_checked || '',
+                    last_updated: status.last_updated || '',
+                    next_update: status.next_update || ''
+                };
+            });
+        }
+
+        async function loadDashboardConfig() {
+            const res = await authFetch('api/config?t=' + Date.now(), { cache: 'no-store' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            return data;
+        }
+
+        async function loadStatusSnapshot() {
+            const res = await authFetch('api/status?t=' + Date.now(), { cache: 'no-store' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            return data;
+        }
+
         async function loadStatus() {
             try {
-                const res = await authFetch('api/status?t=' + Date.now(), { cache: 'no-store' });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-
+                const config = await loadDashboardConfig();
+                let status = null;
                 const syncEl = document.getElementById('lastSync');
-                syncEl.innerHTML = `<span class="dot"></span><span>Last sync: ${formatDateTime(data.last_sync)}</span>`;
 
-                renderTable(data.domains || []);
-                HOSTS = data.hosts || [];
+                try {
+                    status = await loadStatusSnapshot();
+                    syncEl.innerHTML = `<span class="dot"></span><span>Last sync: ${formatDateTime(status.last_sync)}</span>`;
+                } catch (err) {
+                    syncEl.innerHTML = `<span class="dot"></span><span>Status unavailable</span>`;
+                }
+
+                renderTable(mergeDomainStatus(config.domains || [], status?.domains || []));
+                HOSTS = config.hosts || [];
+                SSH_HOSTS = config.hosts || [];
                 renderHostsTable(HOSTS);
                 if (document.getElementById('sshModal').classList.contains('active')) {
                     renderSshHostOptions();
@@ -2425,10 +2471,7 @@
             showValidationStatus([data.message || 'Settings saved successfully!'], true);
             status.innerHTML = '<span style="color: var(--status-valid);">✓ Saved</span>';
 
-            // Reload the dashboard data
-            setTimeout(() => {
-                loadStatus();
-            }, 500);
+            await loadStatus();
         } catch (err) {
             showValidationStatus([err.message], false);
             status.innerHTML = `<span style="color: var(--status-expired);">✗ Save failed</span>`;
