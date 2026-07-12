@@ -980,6 +980,30 @@
 
         <div class="menu-bar">
             <div class="auth-status" id="authStatus">Authenticating...</div>
+            <button class="menu-btn" id="editSettingsBtn" onclick="openSettingsEditor()" title="Edit settings.yml" hidden>
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                Edit Settings
+            </button>
+            <button class="menu-btn" id="sshSetupBtn" onclick="openSshSetup()" title="Show SSH public key and target host commands" hidden>
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect x="5" y="11" width="14" height="10" rx="2"/>
+                    <path d="M8 11V7a4 4 0 0 1 7.2-2.4"/>
+                    <path d="M12 15v2"/>
+                </svg>
+                SSH Key
+            </button>
+            <button class="menu-btn" id="runSyncBtn" onclick="requestManualSync()" title="Run certificate sync now" hidden>
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M21 2v6h-6"/>
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                    <path d="M3 22v-6h6"/>
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                </svg>
+                Run Update
+            </button>
             <button class="menu-btn" id="manageUsersBtn" onclick="openUserManager()" title="Manage users" hidden>
                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -987,31 +1011,6 @@
                     <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
                 Users
-            </button>
-            <button class="menu-btn" id="sshSetupBtn" onclick="openSshSetup()" title="Show SSH public key and target host commands" hidden>
-                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M15.75 7.5a3.75 3.75 0 1 1-3.3-3.72"/>
-                    <path d="M13.5 9.75 21 2.25"/>
-                    <path d="M16.5 2.25H21v4.5"/>
-                    <path d="M6.75 15.75v2.25m4.5-2.25v2.25m-7.5 3.75h10.5a1.5 1.5 0 0 0 1.5-1.5v-6a1.5 1.5 0 0 0-1.5-1.5H3.75a1.5 1.5 0 0 0-1.5 1.5v6a1.5 1.5 0 0 0 1.5 1.5Z"/>
-                </svg>
-                SSH Key
-            </button>
-            <button class="menu-btn" id="runSyncBtn" onclick="requestManualSync()" title="Run certificate sync now" hidden>
-                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M21 12a9 9 0 0 1-15.56 6.18"/>
-                    <path d="M3 12A9 9 0 0 1 18.56 5.82"/>
-                    <path d="M3 18v-5h5"/>
-                    <path d="M21 6v5h-5"/>
-                </svg>
-                Run Now
-            </button>
-            <button class="menu-btn" id="editSettingsBtn" onclick="openSettingsEditor()" title="Edit settings.yml" hidden>
-                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-                Edit Settings
             </button>
             <button class="menu-btn" id="signOutBtn" onclick="signOut()" title="Sign out">Sign Out</button>
         </div>
