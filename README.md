@@ -20,6 +20,7 @@ Certificate Updater is a containerized automatic SSL/TLS certificate manager usi
    DATA_DIR=/path/to/data
    CERT_UID=1000
    CERT_GID=1000
+   TZ=UTC
    ```
 2. Start the init container (creates directories and SSH keys):
    ```bash
@@ -142,7 +143,7 @@ If you later find you need to make your own modifications to the compose file, y
 | `ACME_ACCOUNT_EMAIL` | Email for Let's Encrypt notifications (expiry warnings) |
 | `SYNC_INTERVAL_SECONDS` | Fallback delay between sync attempts when ACME renewal metadata is unavailable (default: `86400`) |
 | `WEB_PORT` | Port for the web dashboard (default: `8080`) |
-| `TZ` | Timezone (default: `UTC`) |
+| `TZ` | Timezone (default: `UTC`). Preferably use your own timezone. |
 
 ### Example `.env`
 
@@ -152,9 +153,23 @@ CERT_UID=1000
 CERT_GID=1000
 ACME_ACCOUNT_EMAIL=admin@example.com
 SYNC_INTERVAL_SECONDS=86400
+TZ=Europe/Ljubljana
 CF_API_TOKEN=your-cloudflare-api-token
 CF_ACCOUNT_ID=your-cloudflare-account-id
 ```
+
+## Supported Architectures
+
+The published container images include runnable manifests for:
+
+| Architecture | Docker platform |
+|--------------|-----------------|
+| x86_64 / AMD64 | `linux/amd64` |
+| ARM64 / AArch64 | `linux/arm64` |
+
+This means you can run the stack on your Raspberry Pi. This has been tested with Ubuntu server running on RPI 3B. Please report other setups both if your deployment is successful or not. 
+
+Other Linux architectures may work with a local image build if the Alpine packages used by the Dockerfiles are available for that platform.
 
 ## Directory Structure
 
@@ -164,7 +179,9 @@ After first run, the following directories are created under `${DATA_DIR}/cert-u
 cert-updater/
 ├── config/          # settings.yml configuration and users.json credentials
 ├── state/           # acme.sh state and certificates
-├── export/          # Exported certificates (key.pem, cert.pem)
+├── export/          # Exported certificates by domain (key.pem, cert.pem)
+│   ├── example.com/
+│   └── site.example.com/
 ├── ssh/             # SSH keys (auto-generated)
 ├── ssh-runtime/     # Runtime SSH data (known_hosts per host)
 │   ├── router/      # known_hosts for 'router' host
@@ -172,9 +189,9 @@ cert-updater/
 ```
 
 ## settings.yml Configuration
-`settings.yml` represents your infrastructure. Hosts contain and serve the certificates - you need to define their location and means of updating. Certificates represent the domains you are maintaining - you need to specify the domain name itself, the host that is holding the certificate files, and the certificate strength. Furthermore, you need to provide infomration on how the ownership of the domain is being challenged.
+`settings.yml` represents your infrastructure. Hosts contain and serve the certificates, so define their SSH destination and reload command. Certificates represent the domains you are maintaining: specify the domain name, the host that receives the certificate files, the destination directory, the key strength, and the DNS challenge settings.
 
-Instead of using literal values for tokens and account ids you can use use the environment variables. You can use any of them but of course only some of them make actual sense. 
+Instead of literal token and account ID values, use environment variable references such as `${CF_API_TOKEN}` or `${DUCKDNS_TOKEN}`.
 
 Place your `settings.yml` in `${DATA_DIR}/cert-updater/config/`. See `config/settings.yml.example` for reference.
 
@@ -205,17 +222,24 @@ domains:
     keylength: ec-256             # Key type: ec-256, ec-384, 2048, 4096 (required)
     host: router                  # Reference to hosts section (required)
     dest: /opt/certs/example.com  # Remote directory for certificates (required)
-
     dns:                          # DNS challenge configuration (required)
-      provider: cf                # DNS provider: cf, duckdns, etc.
+      provider: cf                # DNS provider: cf or duckdns
       env:                        # Environment variables for the DNS provider
         CF_Token: ${CF_API_TOKEN}
         CF_Account_ID: ${CF_ACCOUNT_ID}
+  - name: example.duckdns.org
+    keylength: ec-256
+    host: vps                     # reference to hosts.vps
+    dest: /jffs/nginx/example
+    dns:
+      provider: duckdns
+      env:
+        DuckDNS_Token: ${DUCKDNS_TOKEN}
 ```
 
 ### DNS Providers
 
-The `dns.provider` value corresponds to acme.sh DNS API plugins. Common providers:
+The `dns.provider` value is passed to acme.sh as `dns_<provider>`. The dashboard editor and validation schema currently allow these providers:
 
 Currently supported:
 | Provider | `dns.provider` | Required Environment Variables |
@@ -223,13 +247,13 @@ Currently supported:
 | Cloudflare | `cf` | `CF_API_TOKEN`, `CF_ACCOUNT_ID` |
 | DuckDNS | `duckdns` | `DUCKDNS_TOKEN` |
 
-Could receive support in future releases:
+Other acme.sh DNS providers are not enabled in the dashboard schema yet. Support could be added in future releases:
 | Provider | `dns.provider` | Required Environment Variables |
 |----------|----------------|-------------------------------|
 | Amazon Route 53 | `aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | DigitalOcean | `dgon` | `DO_API_KEY` |
 
-See [acme.sh DNS API documentation](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) for all supported providers.
+See the [acme.sh DNS API documentation](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) for upstream provider names if you want to extend this project.
 
 ### Transfer Methods
 
@@ -321,7 +345,7 @@ docker exec cert-updater /cert-updater/bin/sync-certs.sh
 
 - Ensure the public key is in the correct file on the target host
 - Check file permissions: `authorized_keys` must be `600`
-- Verify the user matches `host_url` in `settings.yml`
+- Verify the user matches the relevant `hosts.<name>.url` value in `settings.yml`
 
 ### sftp-server Not Found
 

@@ -7,6 +7,7 @@
 # ACME_ACCOUNT_EMAIL
 # SYNC_INTERVAL_SECONDS
 # WEB_PORT (default: 8080)
+# TZ (default: UTC)
 
 version: "3.9"
 
@@ -91,7 +92,7 @@ services:
       - ${DATA_DIR}/cert-updater/ssh-runtime:/cert-updater/home/.ssh-runtime
 
     environment:
-      TZ: Europe/Ljubljana
+      TZ: ${TZ:-UTC}
       SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-86400}
       ACME_ACCOUNT_EMAIL: ${ACME_ACCOUNT_EMAIL:-}
       CF_API_TOKEN: ${CF_API_TOKEN:-}

@@ -1,4 +1,3 @@
-```yaml
 # Web dashboard options
 webui:
   subpath: ""              # optional; use certs to serve the UI at /certs/
@@ -35,5 +34,3 @@ domains:
         CF_Account_ID: ${CF_ACCOUNT_ID}
     host: vps               # reference to hosts.vps
     dest: /etc/nginx/certs/site
-
-```
