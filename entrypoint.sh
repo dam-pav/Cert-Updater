@@ -91,17 +91,31 @@ fi
 FALLBACK_SYNC_INTERVAL_SECONDS=$SYNC_INTERVAL_SECONDS
 
 stop_requested=0
+force_sync_requested=0
+sleep_pid=""
 
 handle_shutdown() {
   stop_requested=1
   log "Shutdown signal received, stopping sync loop"
+  if [ -n "$sleep_pid" ] && kill -0 "$sleep_pid" 2>/dev/null; then
+    kill "$sleep_pid" 2>/dev/null || true
+  fi
   if [ -n "$SETTINGS_API_PID" ] && kill -0 "$SETTINGS_API_PID" 2>/dev/null; then
     kill "$SETTINGS_API_PID" 2>/dev/null
     log "Settings API server stopped"
   fi
 }
 
+handle_force_sync() {
+  force_sync_requested=1
+  log "Manual sync requested"
+  if [ -n "$sleep_pid" ] && kill -0 "$sleep_pid" 2>/dev/null; then
+    kill "$sleep_pid" 2>/dev/null || true
+  fi
+}
+
 trap 'handle_shutdown' TERM INT
+trap 'handle_force_sync' USR1
 
 log "Container started"
 
@@ -130,17 +144,27 @@ refresh_sync_interval "$FALLBACK_SYNC_INTERVAL_SECONDS"
 log "Starting internal sync loop (fallback interval: $(format_duration "$SYNC_INTERVAL_SECONDS"))"
 
 while [ "$stop_requested" -eq 0 ]; do
-  log "Sleeping for $(format_duration "$SYNC_INTERVAL_SECONDS") before next sync"
-  sleep "$SYNC_INTERVAL_SECONDS" &
-  sleep_pid=$!
+  if [ "$force_sync_requested" -eq 0 ]; then
+    log "Sleeping for $(format_duration "$SYNC_INTERVAL_SECONDS") before next sync"
+    sleep "$SYNC_INTERVAL_SECONDS" &
+    sleep_pid=$!
 
-  wait "$sleep_pid" || true
+    wait "$sleep_pid" || true
+    sleep_pid=""
+  fi
 
   if [ "$stop_requested" -ne 0 ]; then
     break
   fi
 
-  log "Running scheduled certificate sync"
+  if [ "$force_sync_requested" -eq 1 ]; then
+    sync_label="Manual"
+  else
+    sync_label="Scheduled"
+  fi
+  force_sync_requested=0
+
+  log "Running ${sync_label} certificate sync"
   if /cert-updater/bin/sync-certs.sh; then
     sync_result=0
   else
@@ -150,9 +174,9 @@ while [ "$stop_requested" -eq 0 ]; do
   refresh_sync_interval "$FALLBACK_SYNC_INTERVAL_SECONDS"
 
   if [ "$sync_result" -eq 0 ]; then
-    log "Scheduled sync completed"
+    log "${sync_label} sync completed"
   else
-    log "Scheduled sync failed, will retry after $(format_duration "$SYNC_INTERVAL_SECONDS")"
+    log "${sync_label} sync failed, will retry after $(format_duration "$SYNC_INTERVAL_SECONDS")"
   fi
 done
 

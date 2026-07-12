@@ -10,6 +10,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import tempfile
 import yaml
 from datetime import datetime, timezone
@@ -431,7 +432,19 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = normalized_path(self.path)
-        if path == "/api/settings/write":
+        if path == "/api/sync/run":
+            if not self._require_role("admin"):
+                return
+            try:
+                os.kill(1, signal.SIGUSR1)
+                self._send_json(202, {
+                    "status": "accepted",
+                    "message": "Manual sync requested",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            except Exception as e:
+                self._send_json(500, {"error": f"Failed to request sync: {e}"})
+        elif path == "/api/settings/write":
             if not self._require_role("admin"):
                 return
             length = int(self.headers.get("Content-Length", 0))

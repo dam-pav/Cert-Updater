@@ -997,6 +997,15 @@
                 </svg>
                 SSH Key
             </button>
+            <button class="menu-btn" id="runSyncBtn" onclick="requestManualSync()" title="Run certificate sync now" hidden>
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M21 12a9 9 0 0 1-15.56 6.18"/>
+                    <path d="M3 12A9 9 0 0 1 18.56 5.82"/>
+                    <path d="M3 18v-5h5"/>
+                    <path d="M21 6v5h-5"/>
+                </svg>
+                Run Now
+            </button>
             <button class="menu-btn" id="editSettingsBtn" onclick="openSettingsEditor()" title="Edit settings.yml" hidden>
                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -1335,12 +1344,14 @@
             const editBtn = document.getElementById('editSettingsBtn');
             const usersBtn = document.getElementById('manageUsersBtn');
             const sshBtn = document.getElementById('sshSetupBtn');
+            const runSyncBtn = document.getElementById('runSyncBtn');
 
             if (!CURRENT_USER) {
                 authStatus.textContent = 'Not signed in';
                 editBtn.hidden = true;
                 usersBtn.hidden = true;
                 sshBtn.hidden = true;
+                runSyncBtn.hidden = true;
                 return;
             }
 
@@ -1351,6 +1362,7 @@
             editBtn.hidden = CURRENT_USER.role !== 'admin';
             usersBtn.hidden = false;
             sshBtn.hidden = false;
+            runSyncBtn.hidden = CURRENT_USER.role !== 'admin';
         }
 
         function canManageAllUsers() {
@@ -1659,6 +1671,35 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
             CURRENT_USER = await res.json();
             updateAuthUi();
+        }
+
+        async function requestManualSync() {
+            if (!CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+            const runBtn = document.getElementById('runSyncBtn');
+            runBtn.disabled = true;
+            runBtn.title = 'Manual sync requested';
+
+            try {
+                const res = await authFetch('api/sync/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+                const syncEl = document.getElementById('lastSync');
+                syncEl.innerHTML = `<span class="dot"></span><span>${escapeHtml(data.message || 'Manual sync requested')}</span>`;
+                setTimeout(loadStatus, 3000);
+            } catch (err) {
+                const syncEl = document.getElementById('lastSync');
+                syncEl.innerHTML = `<span class="dot"></span><span>Run request failed: ${escapeHtml(err.message)}</span>`;
+            } finally {
+                setTimeout(() => {
+                    runBtn.disabled = false;
+                    runBtn.title = 'Run certificate sync now';
+                }, 2000);
+            }
         }
 
         function mergeDomainStatus(configDomains, statusDomains) {

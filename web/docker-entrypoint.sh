@@ -92,6 +92,13 @@ write_api_locations() {
         proxy_set_header Authorization \$http_authorization;
     }
 
+    location = ${prefix}/api/sync/run {
+        limit_except POST { deny all; }
+        proxy_pass http://cert-updater:8081;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header Content-Type \$content_type;
+    }
+
     location = ${prefix}/api/settings/read {
         proxy_pass http://cert-updater:8081;
         proxy_set_header Authorization \$http_authorization;

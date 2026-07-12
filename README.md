@@ -54,6 +54,7 @@ The dashboard displays:
 - **Summary cards**: Total, valid, expired, and unknown certificates
 - **Domain table**: Domain name, target host, DNS provider, status, last checked, last updated, and next renewal date
 - **SSH Key helper**: Shows the generated public key and copyable setup commands for configured target hosts
+- **Manual sync**: Admin users can request an immediate backend sync from the dashboard
 - **Auto-refresh**: Updates every 60 seconds
 - **Manual refresh**: Click the floating refresh button
 - **Role-based access**: `viewer` users can view certificate status; `admin` users can also edit `settings.yml`
@@ -325,6 +326,8 @@ A successful deployment WILL NOT ask for password.
 The worker performs one sync immediately on startup, then keeps running a lightweight shell loop inside the container.
 
 After each sync, the loop reads acme.sh renewal metadata for every configured domain and sleeps until the earliest reported renewal time. acme.sh still decides whether a certificate is actually due for renewal, so non-due certificates are skipped safely.
+
+Admin users can click **Run Now** in the dashboard to request an immediate sync. This interrupts the current sleep and runs the normal backend sync path once; it does not automatically run every time `settings.yml` is saved.
 
 If renewal metadata is not available yet, the worker falls back to `SYNC_INTERVAL_SECONDS`. To change that fallback, set it in your `.env`:
 
