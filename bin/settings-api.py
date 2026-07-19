@@ -13,6 +13,7 @@ import secrets
 import signal
 import shlex
 import subprocess
+import sys
 import tempfile
 import yaml
 from datetime import datetime, timezone
@@ -150,8 +151,17 @@ def users_for_actor(actor):
     return [public_user(user) for user in users if user.get("username") == actor.get("username")]
 
 
+def log_host_diagnostic(host_name, status, reason):
+    print(f"Host diagnostic {host_name}: {status} ({reason})", file=sys.stderr, flush=True)
+
+
+def command_output(result):
+    return f"{result.stdout}\n{result.stderr}".strip()
+
+
 def diagnose_host(host_name, host_url, dest, transfer):
     if not host_url:
+        log_host_diagnostic(host_name, "Unreachable", "missing host URL")
         return "Unreachable"
 
     known_hosts_dir = os.path.join(SSH_RUNTIME_DIR, host_name)
@@ -172,16 +182,25 @@ def diagnose_host(host_name, host_url, dest, transfer):
             timeout=8,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        log_host_diagnostic(host_name, "Unreachable", "SSH probe timed out")
+        return "Unreachable"
+    except OSError as e:
+        log_host_diagnostic(host_name, "Unreachable", f"SSH probe failed to start: {e}")
         return "Unreachable"
 
     if probe.returncode != 0:
-        output = f"{probe.stdout}\n{probe.stderr}".lower()
-        if "permission denied" in output or "publickey" in output:
+        output = command_output(probe)
+        lower_output = output.lower()
+        reason = output or f"ssh exited {probe.returncode}"
+        if "permission denied" in lower_output or "publickey" in lower_output:
+            log_host_diagnostic(host_name, "MissingKey", reason)
             return "MissingKey"
+        log_host_diagnostic(host_name, "Unreachable", reason)
         return "Unreachable"
 
     if not dest:
+        log_host_diagnostic(host_name, "NoDest", "no configured domain destination for host")
         return "NoDest"
 
     quoted_dest = shlex.quote(dest)
@@ -198,23 +217,21 @@ def diagnose_host(host_name, host_url, dest, transfer):
             timeout=8,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        log_host_diagnostic(host_name, "Unreachable", "destination write test timed out")
+        return "Unreachable"
+    except OSError as e:
+        log_host_diagnostic(host_name, "Unreachable", f"destination write test failed to start: {e}")
         return "Unreachable"
     if delivery.returncode != 0:
-        return "Error"
-
-    remote_transfer_cmd = "rsync" if transfer == "rsync" else "scp"
-    try:
-        transfer_check = subprocess.run(
-            ssh_cmd + [f"command -v {remote_transfer_cmd} >/dev/null 2>&1"],
-            capture_output=True,
-            text=True,
-            timeout=8,
-            check=False,
+        log_host_diagnostic(
+            host_name,
+            "Error",
+            command_output(delivery) or f"destination write test exited {delivery.returncode}",
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return "Unreachable"
-    return "Ready" if transfer_check.returncode == 0 else "Error"
+        return "Error"
+    log_host_diagnostic(host_name, "Ready", f"SSH and destination write test succeeded via {transfer}")
+    return "Ready"
 
 
 def host_transfer_value(host):

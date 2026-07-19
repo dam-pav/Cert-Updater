@@ -28,6 +28,10 @@ shell_quote() {
   printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
 }
 
+log_host_diagnostic() {
+  printf 'Host diagnostic %s: %s (%s)\n' "$1" "$2" "$3" >&2
+}
+
 diagnose_host() {
   host_name=$1
   host_url=$2
@@ -35,6 +39,7 @@ diagnose_host() {
   transfer=$4
 
   if [ -z "$host_url" ]; then
+    log_host_diagnostic "$host_name" "Unreachable" "missing host URL"
     printf 'Unreachable'
     return
   fi
@@ -46,31 +51,32 @@ diagnose_host() {
 
   if [ "$probe_code" -ne 0 ]; then
     case "$(printf '%s' "$probe_output" | tr '[:upper:]' '[:lower:]')" in
-      *"permission denied"*|*"publickey"*) printf 'MissingKey' ;;
-      *) printf 'Unreachable' ;;
+      *"permission denied"*|*"publickey"*)
+        log_host_diagnostic "$host_name" "MissingKey" "${probe_output:-ssh exited $probe_code}"
+        printf 'MissingKey'
+        ;;
+      *)
+        log_host_diagnostic "$host_name" "Unreachable" "${probe_output:-ssh exited $probe_code}"
+        printf 'Unreachable'
+        ;;
     esac
     return
   fi
 
   if [ -z "$dest" ]; then
+    log_host_diagnostic "$host_name" "NoDest" "no configured domain destination for host"
     printf 'NoDest'
     return
   fi
 
   quoted_dest=$(shell_quote "$dest")
-  if ssh $ssh_opts "$host_url" "mkdir -p $quoted_dest && tmp=$quoted_dest/.cert-updater-write-test.\$\$ && : > \"\$tmp\" && rm -f \"\$tmp\"" >/dev/null 2>&1; then
-    if [ "$transfer" = "rsync" ]; then
-      remote_transfer_cmd=rsync
-    else
-      remote_transfer_cmd=scp
-    fi
-
-    if ssh $ssh_opts "$host_url" "command -v $remote_transfer_cmd >/dev/null 2>&1" >/dev/null 2>&1; then
-      printf 'Ready'
-    else
-      printf 'Error'
-    fi
+  delivery_output=$(ssh $ssh_opts "$host_url" "mkdir -p $quoted_dest && tmp=$quoted_dest/.cert-updater-write-test.\$\$ && : > \"\$tmp\" && rm -f \"\$tmp\"" 2>&1)
+  delivery_code=$?
+  if [ "$delivery_code" -eq 0 ]; then
+    log_host_diagnostic "$host_name" "Ready" "SSH and destination write test succeeded via $transfer"
+    printf 'Ready'
   else
+    log_host_diagnostic "$host_name" "Error" "${delivery_output:-destination write test exited $delivery_code}"
     printf 'Error'
   fi
 }
