@@ -1,0 +1,37 @@
+@import url("default.css");
+
+:root {
+    --bg-primary: #101418;
+    --bg-secondary: #171d24;
+    --bg-card: #202a33;
+    --bg-control: #0f141a;
+    --bg-tab: #151b22;
+    --text-primary: #eef4f8;
+    --text-secondary: #9cabb8;
+    --accent: #38bdf8;
+    --accent-muted: #0ea5e9;
+    --accent-glow: rgba(56, 189, 248, 0.18);
+    --border: #2d3a46;
+    --border-soft: rgba(45, 58, 70, 0.82);
+    --row-hover: rgba(56, 189, 248, 0.08);
+    --overlay: rgba(3, 7, 18, 0.65);
+    --selection: rgba(56, 189, 248, 0.26);
+    --status-valid: #4ade80;
+    --status-expired: #fb7185;
+    --status-unknown: #fbbf24;
+    --provider-bg: rgba(129, 140, 248, 0.16);
+    --provider-text: #a5b4fc;
+    --syntax-key-valid: #7dd3fc;
+    --syntax-val-valid: #93c5fd;
+    --syntax-error: #fb7185;
+    --syntax-comment: #7f8b96;
+    --syntax-string: #a7f3d0;
+    --syntax-anchor: #c4b5fd;
+    --syntax-directive: #bfdbfe;
+    --syntax-tag: #fcd34d;
+    --syntax-null: #f9a8d4;
+    --syntax-bool: #fdba74;
+    --syntax-punctuation: #6b7b88;
+    --shadow: 0 16px 42px rgba(0, 0, 0, 0.35);
+    --modal-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
+}

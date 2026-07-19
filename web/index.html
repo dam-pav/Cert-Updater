@@ -5,946 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="dam-pav.logo.svg" type="image/svg+xml">
     <link id="settingsSchemaAsset" rel="schema" href="settings.schema.json" type="application/json">
+    <link id="themeStylesheet" rel="stylesheet" href="default.css">
     <title>Certificate Updater Status</title>
-    <style>
-        :root {
-            --bg-primary: #ffffff;
-            --bg-secondary: #f8fafc;
-            --bg-card: #eef4fb;
-            --text-primary: #172033;
-            --text-secondary: #64748b;
-            --accent: #005dff;
-            --accent-muted: #2563eb;
-            --accent-glow: rgba(0, 93, 255, 0.1);
-            --border: #d5e0ee;
-            --status-valid: #16a34a;
-            --status-expired: #dc2626;
-            --status-unknown: #d97706;
-            --radius: 12px;
-            --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        [hidden] {
-            display: none !important;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 2rem;
-        }
-
-        .container {
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-
-        header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            text-align: left;
-            margin-bottom: 2rem;
-        }
-
-        header h1 {
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            letter-spacing: 0;
-            line-height: 1.15;
-        }
-
-        .title-logo {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            box-shadow: 0 8px 18px rgba(0, 93, 255, 0.16);
-        }
-
-        .title-logo-link {
-            display: inline-flex;
-            border-radius: 10px;
-        }
-
-        .last-sync {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: var(--bg-secondary);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-            white-space: nowrap;
-        }
-
-        .last-sync .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--accent);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        .subpage-tabs {
-            display: flex;
-            align-items: flex-end;
-            gap: 0.25rem;
-            margin-bottom: -1px;
-            padding-left: 0.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .subpage-tab {
-            position: relative;
-            min-width: 8rem;
-            background: #f3f7fc;
-            border: 1px solid var(--border);
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 0.88rem;
-            font-weight: 600;
-            padding: 0.7rem 1rem;
-            transition: background 0.2s, color 0.2s, border-color 0.2s;
-        }
-
-        .subpage-tab:hover {
-            color: var(--text-primary);
-            border-color: var(--accent);
-        }
-
-        .subpage-tab.active {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            border-color: var(--border);
-            z-index: 1;
-        }
-
-        .subpage {
-            display: none;
-        }
-
-        .subpage.active {
-            display: block;
-        }
-
-        .table-container {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 0 var(--radius) var(--radius) var(--radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        thead {
-            background: var(--bg-card);
-        }
-
-        th {
-            padding: 1rem 1.25rem;
-            text-align: left;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary);
-            border-bottom: 1px solid var(--border);
-        }
-
-        td {
-            padding: 1rem 1.25rem;
-            font-size: 0.9rem;
-            border-bottom: 1px solid rgba(213, 224, 238, 0.8);
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        tr {
-            transition: background 0.15s;
-        }
-
-        tbody tr:hover {
-            background: rgba(0, 93, 255, 0.04);
-        }
-
-        .domain-name {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .host-tag {
-            display: inline-block;
-            background: var(--accent-glow);
-            color: var(--accent);
-            padding: 0.25rem 0.65rem;
-            border-radius: 6px;
-            font-size: 0.82rem;
-            font-weight: 500;
-        }
-
-        .transfer-badge {
-            display: inline-block;
-            background: rgba(34, 197, 94, 0.15);
-            color: var(--status-valid);
-            padding: 0.25rem 0.65rem;
-            border-radius: 6px;
-            font-size: 0.82rem;
-            font-weight: 500;
-            text-transform: uppercase;
-        }
-
-        .command-text {
-            color: var(--text-secondary);
-            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-            font-size: 0.82rem;
-            line-height: 1.5;
-            overflow-wrap: anywhere;
-        }
-
-        .copy-block {
-            width: 100%;
-            min-height: 7rem;
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-            font-size: 0.82rem;
-            line-height: 1.5;
-            padding: 0.85rem;
-            resize: vertical;
-        }
-
-        .ssh-grid {
-            display: grid;
-            gap: 1rem;
-        }
-
-        .ssh-field {
-            display: grid;
-            gap: 0.4rem;
-        }
-
-        .ssh-field label {
-            color: var(--text-secondary);
-            font-size: 0.82rem;
-            font-weight: 600;
-        }
-
-        .ssh-field select {
-            width: 100%;
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font: inherit;
-            padding: 0.55rem 0.65rem;
-            outline: none;
-        }
-
-        .ssh-field select:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-
-        .ssh-note {
-            color: var(--text-secondary);
-            font-size: 0.86rem;
-            line-height: 1.5;
-        }
-
-        .ssh-status {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-left: auto;
-        }
-
-        .ssh-status.success {
-            color: var(--status-valid);
-        }
-
-        .ssh-status.error {
-            color: var(--status-expired);
-        }
-
-        .provider-badge {
-            display: inline-block;
-            background: rgba(99, 102, 241, 0.12);
-            color: #4f46e5;
-            padding: 0.25rem 0.65rem;
-            border-radius: 6px;
-            font-size: 0.82rem;
-            font-weight: 500;
-        }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.3rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            text-transform: capitalize;
-        }
-
-        .status-badge.valid {
-            background: rgba(34, 197, 94, 0.15);
-            color: var(--status-valid);
-        }
-
-        .status-badge.expired {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--status-expired);
-        }
-
-        .status-badge.unknown {
-            background: rgba(245, 158, 11, 0.15);
-            color: var(--status-unknown);
-        }
-
-        .status-badge .status-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-        }
-
-        .status-badge.valid .status-dot { background: var(--status-valid); }
-        .status-badge.expired .status-dot { background: var(--status-expired); }
-        .status-badge.unknown .status-dot { background: var(--status-unknown); }
-
-        .status-badge.host-status {
-            text-transform: none;
-        }
-
-        .datetime {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-secondary);
-        }
-
-        .loading .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 1rem;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .error-msg {
-            text-align: center;
-            padding: 2rem;
-            color: var(--status-expired);
-            background: rgba(239, 68, 68, 0.08);
-            border-radius: var(--radius);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 3rem 2rem;
-            color: var(--text-secondary);
-        }
-
-        .empty-state svg {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 1rem;
-            opacity: 0.4;
-        }
-
-        @media (max-width: 768px) {
-            body { padding: 1rem; }
-            header {
-                align-items: flex-start;
-                flex-direction: column;
-                gap: 1rem;
-            }
-            th, td { padding: 0.75rem 0.75rem; }
-            .subpage-tab {
-                flex: 1;
-                min-width: 0;
-            }
-            table { font-size: 0.85rem; }
-        }
-
-        @media (max-width: 500px) {
-            .hide-mobile { display: none; }
-        }
-
-        /* ── Menu & Editor Modal ── */
-        .menu-bar {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-
-        .auth-status {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-right: auto;
-        }
-
-        .auth-warning {
-            color: var(--status-unknown);
-            font-weight: 600;
-        }
-
-        .menu-btn {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            color: var(--text-primary);
-            padding: 0.6rem 1.2rem;
-            cursor: pointer;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: background 0.2s, border-color 0.2s;
-        }
-
-        .menu-btn:hover {
-            background: var(--bg-card);
-            border-color: var(--accent);
-        }
-
-        .menu-btn svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        .users-table-wrap {
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow-x: auto;
-        }
-
-        .users-table {
-            min-width: 640px;
-        }
-
-        .users-table th,
-        .users-table td {
-            vertical-align: top;
-        }
-
-        .users-table input,
-        .users-table select {
-            width: 100%;
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font: inherit;
-            padding: 0.55rem 0.65rem;
-            outline: none;
-        }
-
-        .users-table input:focus,
-        .users-table select:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-
-        .users-table input[readonly] {
-            background: var(--bg-secondary);
-            color: var(--text-secondary);
-        }
-
-        .password-stack,
-        .role-stack {
-            display: grid;
-            gap: 0.45rem;
-        }
-
-        .remove-user-btn {
-            background: transparent;
-            border: 1px solid rgba(220, 38, 38, 0.28);
-            border-radius: 8px;
-            color: var(--status-expired);
-            cursor: pointer;
-            font-size: 0.82rem;
-            padding: 0.45rem 0.65rem;
-        }
-
-        .remove-user-btn:hover {
-            background: rgba(239, 68, 68, 0.08);
-        }
-
-        .user-status {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-left: auto;
-        }
-
-        .user-status.success {
-            color: var(--status-valid);
-        }
-
-        .user-status.error {
-            color: var(--status-expired);
-        }
-
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.35);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            padding: 2rem;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            width: 100%;
-            max-width: 900px;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .modal-header h2 {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            padding: 0.25rem;
-            border-radius: 6px;
-            transition: color 0.2s, background 0.2s;
-            display: flex;
-            align-items: center;
-        }
-
-        .modal-close:hover {
-            color: var(--text-primary);
-            background: var(--bg-card);
-        }
-
-        .modal-close svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .editor-toolbar {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .editor-toolbar button {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.82rem;
-            transition: background 0.2s, border-color 0.2s;
-        }
-
-        .editor-toolbar button:hover {
-            border-color: var(--accent);
-            background: var(--accent-glow);
-        }
-
-        .editor-toolbar button.primary {
-            background: var(--accent);
-            color: var(--bg-primary);
-            border-color: var(--accent);
-            font-weight: 600;
-        }
-
-        .editor-toolbar button.primary:hover {
-            background: var(--accent-muted);
-        }
-
-        .editor-toolbar button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .editor-wrapper {
-            position: relative;
-            width: 100%;
-            height: clamp(400px, 58vh, 640px);
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            transition: border-color 0.2s;
-            --editor-font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-            /* Ensure consistent box model */
-            -webkit-text-size-adjust: none;
-            -moz-text-size-adjust: none;
-            text-size-adjust: none;
-        }
-
-        .editor-wrapper:focus-within {
-            border-color: var(--accent);
-        }
-
-        .editor-highlight {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            font-family: var(--editor-font);
-            font-size: 0.85rem;
-            font-weight: 400;
-            font-style: normal;
-            line-height: 1.6;
-            letter-spacing: 0;
-            padding: 1rem;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            pointer-events: none;
-            overflow: hidden;
-            tab-size: 2;
-            margin: 0;
-            border: none;
-            background: transparent;
-            color: var(--text-primary);
-            box-sizing: border-box;
-            font-kerning: none;
-            font-variant-ligatures: none;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
-
-        .editor-highlight-content {
-            display: block;
-            min-height: 100%;
-            font: inherit;
-            white-space: inherit;
-            background: transparent;
-            color: inherit;
-        }
-
-        .editor-highlight span {
-            font: inherit;
-            background: transparent;
-        }
-
-        /* Plain YAML text that is not a schema token still needs to remain readable. */
-        .editor-highlight .hl-uncolored {
-            color: var(--text-primary);
-        }
-
-        .editor-textarea {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            background: transparent;
-            border: none;
-            color: transparent;
-            -webkit-text-fill-color: transparent;
-            font-family: var(--editor-font);
-            font-size: 0.85rem;
-            font-weight: 400;
-            font-style: normal;
-            line-height: 1.6;
-            letter-spacing: 0;
-            padding: 1rem;
-            margin: 0;
-            resize: none;
-            outline: none;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            overflow: auto;
-            tab-size: 2;
-            caret-color: var(--accent);
-            z-index: 1;
-            font-kerning: none;
-            font-variant-ligatures: none;
-            /* Remove default textarea styling */
-            border-radius: 0;
-            box-shadow: none;
-            -webkit-appearance: none;
-            appearance: none;
-            box-sizing: border-box;
-        }
-
-        .editor-textarea::selection {
-            background: rgba(0, 93, 255, 0.18);
-        }
-
-        .editor-textarea::placeholder {
-            color: var(--text-secondary);
-            -webkit-text-fill-color: var(--text-secondary);
-        }
-
-        /* Syntax highlight colors */
-        .editor-highlight .hl-key-valid {
-            color: #047857;
-        }
-        .editor-highlight .hl-val-valid { color: #1d4ed8; }
-        .editor-highlight .hl-key-invalid { color: var(--text-primary); }    /* invalid key, marked by underline */
-        .editor-highlight .hl-val-invalid { color: var(--text-primary); }    /* invalid value, marked by underline */
-        .hl-error-symbol {
-            background: transparent;
-            text-decoration-line: underline;
-            text-decoration-style: wavy;
-            text-decoration-color: #ef4444;
-            text-decoration-thickness: 1.5px;
-            text-underline-offset: 3px;
-        }
-        .editor-highlight .hl-comment { color: #64748b; } /* comments */
-        .editor-highlight .hl-string { color: #1d4ed8; }           /* blue strings */
-        .editor-highlight .hl-anchor { color: #7c3aed; }           /* purple YAML anchors/aliases */
-        .editor-highlight .hl-directive { color: #4f46e5; }        /* YAML directives */
-        .editor-highlight .hl-tag { color: #b45309; }              /* YAML tags */
-        .editor-highlight .hl-null { color: #be185d; }             /* null values */
-        .editor-highlight .hl-bool { color: #c2410c; }             /* booleans */
-        .editor-highlight .hl-colon { color: #94a3b8; } /* colon separator */
-        .editor-highlight .hl-dash { color: #94a3b8; }  /* list dash */
-
-        @media (max-width: 768px) {
-            .editor-wrapper {
-                height: 55vh;
-                min-height: 320px;
-            }
-        }
-
-        .validation-status {
-            margin-top: 1rem;
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            display: none;
-        }
-
-        .validation-status.visible {
-            display: block;
-        }
-
-        .validation-status.success {
-            background: rgba(34, 197, 94, 0.1);
-            border: 1px solid rgba(34, 197, 94, 0.3);
-            color: var(--status-valid);
-        }
-
-        .validation-status.error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: var(--status-expired);
-        }
-
-        .validation-status .error-list {
-            margin-top: 0.5rem;
-            padding-left: 1.2rem;
-        }
-
-        .validation-status .error-list li {
-            margin-bottom: 0.25rem;
-        }
-
-        .modal-footer {
-            padding: 1rem 1.5rem;
-            border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.75rem;
-        }
-
-        .modal-footer button {
-            padding: 0.5rem 1.2rem;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-        }
-
-        .modal-footer .btn-cancel {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-        }
-
-        .modal-footer .btn-cancel:hover {
-            background: var(--bg-secondary);
-        }
-
-        .modal-footer .btn-save {
-            background: var(--accent);
-            border: 1px solid var(--accent);
-            color: var(--bg-primary);
-            font-weight: 600;
-        }
-
-        .modal-footer .btn-save:hover {
-            background: #7dd3fc;
-        }
-
-        .modal-footer .btn-save:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .loading-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-        }
-
-        .loading-indicator .spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        .login-shell {
-            min-height: calc(100vh - 4rem);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .login-panel {
-            width: min(100%, 360px);
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 1.5rem;
-        }
-
-        .login-panel h1 {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            color: var(--text-primary);
-            font-size: 1.25rem;
-            line-height: 1.2;
-            margin-bottom: 1.25rem;
-        }
-
-        .login-field {
-            display: grid;
-            gap: 0.35rem;
-            margin-bottom: 0.9rem;
-        }
-
-        .login-field label {
-            color: var(--text-secondary);
-            font-size: 0.82rem;
-            font-weight: 600;
-        }
-
-        .login-field input {
-            width: 100%;
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font: inherit;
-            padding: 0.65rem 0.75rem;
-            outline: none;
-        }
-
-        .login-field input:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-
-        .login-submit {
-            width: 100%;
-            justify-content: center;
-            margin-top: 0.35rem;
-        }
-
-        .login-error {
-            display: none;
-            color: var(--status-expired);
-            font-size: 0.85rem;
-            margin-top: 0.85rem;
-        }
-
-        .login-error.visible {
-            display: block;
-        }
-    </style>
 </head>
 <body>
     <div class="login-shell" id="loginShell">
@@ -984,6 +46,13 @@
 
         <div class="menu-bar">
             <div class="auth-status" id="authStatus">Authenticating...</div>
+            <label class="theme-field" for="themeSelect">
+                Theme
+                <select id="themeSelect" onchange="setTheme(this.value)">
+                    <option value="default">Default</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </label>
             <button class="menu-btn" id="editSettingsBtn" onclick="openSettingsEditor()" title="Edit settings.yml" hidden>
                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -1097,7 +166,7 @@
                     <button onclick="copyEditorContent()" title="Copy to clipboard">Copy</button>
                     <button onclick="pasteEditorContent()" title="Paste from clipboard">Paste</button>
                     <button onclick="loadSettings()" id="reloadBtn">Reload</button>
-                    <span id="editorStatus" style="margin-left:auto;"></span>
+                    <span class="editor-status" id="editorStatus"></span>
                 </div>
                 <div class="editor-wrapper" id="editorWrapper">
                     <pre class="editor-highlight" id="editorHighlight" aria-hidden="true"><code class="editor-highlight-content" id="editorHighlightContent"></code></pre>
@@ -1205,6 +274,8 @@
         let SSH_HOSTS = [];
         let SSH_PUBLIC_KEY = '';
         const AUTH_STORAGE_KEY = 'cert-updater-basic-auth';
+        const THEME_COOKIE_KEY = 'cert-updater-theme';
+        const THEMES = new Set(['default', 'dark']);
 
         function escapeHtml(str) {
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1301,6 +372,44 @@
             sessionStorage.removeItem(AUTH_STORAGE_KEY);
         }
 
+        function getCookie(name) {
+            const prefix = `${name}=`;
+            const cookie = document.cookie
+                .split(';')
+                .map(part => part.trim())
+                .find(part => part.startsWith(prefix));
+            return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : '';
+        }
+
+        function setCookie(name, value) {
+            document.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=31536000; Path=${appBaseUrl().pathname || '/'}; SameSite=Lax`;
+        }
+
+        function getSavedTheme() {
+            const theme = getCookie(THEME_COOKIE_KEY);
+            return THEMES.has(theme) ? theme : 'default';
+        }
+
+        function themeStylesheetPath(theme) {
+            return `${THEMES.has(theme) ? theme : 'default'}.css`;
+        }
+
+        function applyTheme(theme) {
+            const selectedTheme = THEMES.has(theme) ? theme : 'default';
+            document.documentElement.dataset.theme = selectedTheme;
+            document.getElementById('themeStylesheet').href = appUrl(themeStylesheetPath(selectedTheme));
+            const selector = document.getElementById('themeSelect');
+            if (selector) {
+                selector.value = selectedTheme;
+            }
+        }
+
+        function setTheme(theme) {
+            const selectedTheme = THEMES.has(theme) ? theme : 'default';
+            setCookie(THEME_COOKIE_KEY, selectedTheme);
+            applyTheme(selectedTheme);
+        }
+
         function authHeaders(extraHeaders = {}) {
             const token = getAuthToken();
             return token ? { ...extraHeaders, Authorization: `Basic ${token}` } : extraHeaders;
@@ -1323,6 +432,7 @@
 
         function updateStaticAssetUrls() {
             document.getElementById('settingsSchemaAsset').href = appUrl('settings.schema.json');
+            applyTheme(getSavedTheme());
             document.querySelectorAll('img.title-logo').forEach(img => {
                 img.src = appUrl('dam-pav.logo.svg');
             });
@@ -1758,9 +868,9 @@
                 }
             } catch (err) {
                 document.getElementById('domainTable').innerHTML = `
-                    <tr><td colspan="7"><div class="error-msg">Failed to load status: ${err.message}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
+                    <tr><td colspan="7"><div class="error-msg">Failed to load status: ${escapeHtml(err.message)}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
                 document.getElementById('hostTable').innerHTML = `
-                    <tr><td colspan="6"><div class="error-msg">Failed to load hosts: ${err.message}</div></td></tr>`;
+                    <tr><td colspan="6"><div class="error-msg">Failed to load hosts: ${escapeHtml(err.message)}</div></td></tr>`;
             }
         }
 
@@ -2417,7 +1527,7 @@
             await loadYamlLibrary();
             await loadSettingsSchema();
         } catch (err) {
-            status.innerHTML = `<span style="color: var(--status-expired);">✗ ${err.message}</span>`;
+            status.innerHTML = `<span class="status-inline error">✗ ${escapeHtml(err.message)}</span>`;
             editor.value = '# Error opening settings editor\n# ' + err.message;
             updateHighlighting();
             return;
@@ -2444,7 +1554,7 @@
             await loadYamlLibrary();
             await loadSettingsSchema();
         } catch (err) {
-            status.innerHTML = `<span style="color: var(--status-expired);">✗ ${err.message}</span>`;
+            status.innerHTML = `<span class="status-inline error">✗ ${escapeHtml(err.message)}</span>`;
             editor.value = '# Error loading settings editor dependencies\n# ' + err.message;
             updateHighlighting();
             return;
@@ -2456,7 +1566,7 @@
             const content = await res.text();
             editor.value = content;
             updateHighlighting();
-            status.innerHTML = '<span style="color: var(--status-valid);">✓ Loaded</span>';
+            status.innerHTML = '<span class="status-inline success">✓ Loaded</span>';
             validateAndEnableSave();
         } catch (err) {
             try {
@@ -2464,10 +1574,10 @@
                 await loadSettingsSchema();
                 const validation = validateAndEnableSave();
                 status.innerHTML = validation.valid
-                    ? '<span style="color: var(--status-valid);">✓ Loaded example</span>'
-                    : '<span style="color: var(--status-expired);">✗ Loaded example with validation errors</span>';
+                    ? '<span class="status-inline success">✓ Loaded example</span>'
+                    : '<span class="status-inline error">✗ Loaded example with validation errors</span>';
             } catch {
-                status.innerHTML = `<span style="color: var(--status-expired);">✗ ${err.message}</span>`;
+                status.innerHTML = `<span class="status-inline error">✗ ${escapeHtml(err.message)}</span>`;
                 editor.value = '# Error loading settings.yml\n# ' + err.message;
                 updateHighlighting();
             }
@@ -2484,7 +1594,7 @@
             await loadSettingsSchema();
         } catch (err) {
             saveBtn.disabled = true;
-            status.innerHTML = `<span style="color: var(--status-expired);">✗ Schema unavailable</span>`;
+            status.innerHTML = `<span class="status-inline error">✗ Schema unavailable</span>`;
             showValidationStatus([{ message: `Cannot validate settings: ${err.message}` }], false);
             return;
         }
@@ -2515,12 +1625,12 @@
             }
 
             showValidationStatus([data.message || 'Settings saved successfully!'], true);
-            status.innerHTML = '<span style="color: var(--status-valid);">✓ Saved</span>';
+            status.innerHTML = '<span class="status-inline success">✓ Saved</span>';
 
             await loadStatus();
         } catch (err) {
             showValidationStatus([err.message], false);
-            status.innerHTML = `<span style="color: var(--status-expired);">✗ Save failed</span>`;
+            status.innerHTML = `<span class="status-inline error">✗ Save failed</span>`;
         } finally {
             saveBtn.disabled = false;
             saveBtn.textContent = 'Save';
@@ -2704,7 +1814,7 @@
         try {
             await navigator.clipboard.writeText(editor.value);
             const status = document.getElementById('editorStatus');
-            status.innerHTML = '<span style="color: var(--status-valid);">✓ Copied</span>';
+            status.innerHTML = '<span class="status-inline success">✓ Copied</span>';
             setTimeout(() => { status.innerHTML = ''; }, 2000);
         } catch {
             // Fallback

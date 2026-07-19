@@ -7,6 +7,8 @@ RUN chmod +x /docker-entrypoint.sh && \
     mkdir -p /usr/share/nginx/html/config
 
 COPY web/index.html /usr/share/nginx/html/index.html
+COPY web/default.css /usr/share/nginx/html/default.css
+COPY web/dark.css /usr/share/nginx/html/dark.css
 COPY web/settings.schema.json /usr/share/nginx/html/settings.schema.json
 COPY web/dam-pav.logo.svg /usr/share/nginx/html/dam-pav.logo.svg
 COPY config/settings.yml.example /usr/share/nginx/html/config/settings.yml.example
