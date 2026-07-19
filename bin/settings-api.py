@@ -11,6 +11,8 @@ import os
 import re
 import secrets
 import signal
+import shlex
+import subprocess
 import tempfile
 import yaml
 from datetime import datetime, timezone
@@ -21,6 +23,7 @@ SCHEMA_PATH = os.environ.get("SETTINGS_SCHEMA_PATH", "/cert-updater/web/settings
 CREDENTIALS_PATH = os.environ.get("CREDENTIALS_PATH", "/cert-updater/config/users.json")
 STATUS_PATH = os.environ.get("STATUS_PATH", "/cert-updater/export/status.json")
 SSH_PUBLIC_KEY_PATH = os.environ.get("SSH_PUBLIC_KEY_PATH", "/cert-updater/home/.ssh/id_ed25519.pub")
+SSH_RUNTIME_DIR = os.environ.get("SSH_RUNTIME_DIR", "/cert-updater/home/.ssh-runtime")
 PORT = int(os.environ.get("SETTINGS_API_PORT", "8081"))
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "admin"
@@ -147,6 +150,77 @@ def users_for_actor(actor):
     return [public_user(user) for user in users if user.get("username") == actor.get("username")]
 
 
+def diagnose_host(host_name, host_url, dest, transfer):
+    if not host_url:
+        return "Unreachable"
+
+    known_hosts_dir = os.path.join(SSH_RUNTIME_DIR, host_name)
+    os.makedirs(known_hosts_dir, exist_ok=True)
+    ssh_cmd = [
+        "ssh",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", f"UserKnownHostsFile={os.path.join(known_hosts_dir, 'known_hosts')}",
+        host_url,
+    ]
+    try:
+        probe = subprocess.run(
+            ssh_cmd + ["true"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "Unreachable"
+
+    if probe.returncode != 0:
+        output = f"{probe.stdout}\n{probe.stderr}".lower()
+        if "permission denied" in output or "publickey" in output:
+            return "MissingKey"
+        return "Unreachable"
+
+    if not dest:
+        return "NoDest"
+
+    quoted_dest = shlex.quote(dest)
+    write_test = (
+        f"mkdir -p {quoted_dest} && "
+        f"tmp={quoted_dest}/.cert-updater-write-test.$$ && "
+        ": > \"$tmp\" && rm -f \"$tmp\""
+    )
+    try:
+        delivery = subprocess.run(
+            ssh_cmd + [write_test],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "Unreachable"
+    if delivery.returncode != 0:
+        return "Error"
+
+    remote_transfer_cmd = "rsync" if transfer == "rsync" else "scp"
+    try:
+        transfer_check = subprocess.run(
+            ssh_cmd + [f"command -v {remote_transfer_cmd} >/dev/null 2>&1"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "Unreachable"
+    return "Ready" if transfer_check.returncode == 0 else "Error"
+
+
+def host_transfer_value(host):
+    return host.get("transfer", "scp") if isinstance(host.get("transfer"), str) else "scp"
+
+
 def load_public_config():
     with open(SETTINGS_PATH, "r") as f:
         data = yaml.safe_load(f) or {}
@@ -154,6 +228,7 @@ def load_public_config():
     hosts = data.get("hosts", {}) if isinstance(data.get("hosts"), dict) else {}
     domains = data.get("domains", []) if isinstance(data.get("domains"), list) else []
     domain_counts = {}
+    domain_dests = {}
     public_domains = []
 
     for domain in domains:
@@ -166,6 +241,8 @@ def load_public_config():
             provider = dns.get("provider", "")
         if host_name:
             domain_counts[host_name] = domain_counts.get(host_name, 0) + 1
+            if host_name not in domain_dests and isinstance(domain.get("dest"), str):
+                domain_dests[host_name] = domain.get("dest", "")
         public_domains.append({
             "name": domain.get("name", "") if isinstance(domain.get("name"), str) else "",
             "host": host_name,
@@ -177,10 +254,17 @@ def load_public_config():
         if not isinstance(host, dict):
             continue
         host_name = str(name)
+        host_transfer = host_transfer_value(host)
         public_hosts.append({
             "name": host_name,
             "url": host.get("url", "") if isinstance(host.get("url"), str) else "",
-            "transfer": host.get("transfer", "scp") if isinstance(host.get("transfer"), str) else "scp",
+            "operational": diagnose_host(
+                host_name,
+                host.get("url", "") if isinstance(host.get("url"), str) else "",
+                domain_dests.get(host_name, ""),
+                host_transfer,
+            ),
+            "transfer": host_transfer,
             "reload": host.get("reload", "") if isinstance(host.get("reload"), str) else "",
             "domain_count": domain_counts.get(host_name, 0),
         })

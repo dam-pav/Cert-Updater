@@ -24,6 +24,57 @@ json_string() {
   VALUE=$1 yq e -n -o=json -I=0 'strenv(VALUE)'
 }
 
+shell_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+diagnose_host() {
+  host_name=$1
+  host_url=$2
+  dest=$3
+  transfer=$4
+
+  if [ -z "$host_url" ]; then
+    printf 'Unreachable'
+    return
+  fi
+
+  mkdir -p "/cert-updater/home/.ssh-runtime/${host_name}"
+  ssh_opts="-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=5 -o UserKnownHostsFile=/cert-updater/home/.ssh-runtime/${host_name}/known_hosts"
+  probe_output=$(ssh $ssh_opts "$host_url" "true" 2>&1)
+  probe_code=$?
+
+  if [ "$probe_code" -ne 0 ]; then
+    case "$(printf '%s' "$probe_output" | tr '[:upper:]' '[:lower:]')" in
+      *"permission denied"*|*"publickey"*) printf 'MissingKey' ;;
+      *) printf 'Unreachable' ;;
+    esac
+    return
+  fi
+
+  if [ -z "$dest" ]; then
+    printf 'NoDest'
+    return
+  fi
+
+  quoted_dest=$(shell_quote "$dest")
+  if ssh $ssh_opts "$host_url" "mkdir -p $quoted_dest && tmp=$quoted_dest/.cert-updater-write-test.\$\$ && : > \"\$tmp\" && rm -f \"\$tmp\"" >/dev/null 2>&1; then
+    if [ "$transfer" = "rsync" ]; then
+      remote_transfer_cmd=rsync
+    else
+      remote_transfer_cmd=scp
+    fi
+
+    if ssh $ssh_opts "$host_url" "command -v $remote_transfer_cmd >/dev/null 2>&1" >/dev/null 2>&1; then
+      printf 'Ready'
+    else
+      printf 'Error'
+    fi
+  else
+    printf 'Error'
+  fi
+}
+
 # Start building JSON
 hosts_json=""
 domains_json=""
@@ -35,11 +86,14 @@ while [ "$i" -lt "$host_count" ]; do
   host_transfer=$(HOST_NAME=$host_name yq e '.hosts[strenv(HOST_NAME)].transfer // "scp"' "$CONFIG")
   host_reload=$(HOST_NAME=$host_name yq e '.hosts[strenv(HOST_NAME)].reload // ""' "$CONFIG")
   host_domain_count=$(HOST_NAME=$host_name yq e '[.domains[]? | select(.host == strenv(HOST_NAME))] | length' "$CONFIG")
+  host_dest=$(HOST_NAME=$host_name yq e '[.domains[]? | select(.host == strenv(HOST_NAME)) | .dest // ""] | .[0] // ""' "$CONFIG")
+  host_operational=$(diagnose_host "$host_name" "$host_url" "$host_dest" "$host_transfer")
 
   host_entry=$(cat <<ENTRY
     {
       "name": $(json_string "$host_name"),
       "url": $(json_string "$host_url"),
+      "operational": $(json_string "$host_operational"),
       "transfer": $(json_string "$host_transfer"),
       "reload": $(json_string "$host_reload"),
       "domain_count": $host_domain_count
