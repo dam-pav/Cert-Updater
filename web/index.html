@@ -221,15 +221,6 @@
             text-transform: uppercase;
         }
 
-        .operational-status {
-            color: var(--status-expired);
-            font-weight: 700;
-        }
-
-        .operational-status.ready {
-            color: var(--status-valid);
-        }
-
         .command-text {
             color: var(--text-secondary);
             font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
@@ -349,6 +340,10 @@
         .status-badge.valid .status-dot { background: var(--status-valid); }
         .status-badge.expired .status-dot { background: var(--status-expired); }
         .status-badge.unknown .status-dot { background: var(--status-unknown); }
+
+        .status-badge.host-status {
+            text-transform: none;
+        }
 
         .datetime {
             color: var(--text-secondary);
@@ -1064,7 +1059,7 @@
                         <tr>
                             <th>Host</th>
                             <th>URL</th>
-                            <th>Operational</th>
+                            <th>Status</th>
                             <th>Transfer</th>
                             <th>Domains</th>
                             <th class="hide-mobile">Reload</th>
@@ -1286,7 +1281,7 @@
                 <tr>
                     <td><span class="host-tag">${escapeHtml(h.name || '—')}</span></td>
                     <td class="command-text">${escapeHtml(h.url || '—')}</td>
-                    <td><span class="operational-status ${(h.operational || '') === 'Ready' ? 'ready' : 'error'}">${escapeHtml(h.operational || 'Error')}</span></td>
+                    <td><span class="status-badge host-status ${(h.operational || '') === 'Ready' ? 'valid' : 'expired'}"><span class="status-dot"></span>${escapeHtml(h.operational || 'Error')}</span></td>
                     <td><span class="transfer-badge">${escapeHtml(h.transfer || 'scp')}</span></td>
                     <td>${Number.isFinite(Number(h.domain_count)) ? Number(h.domain_count) : 0}</td>
                     <td class="command-text hide-mobile">${escapeHtml(h.reload || '—')}</td>

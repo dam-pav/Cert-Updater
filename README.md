@@ -16,6 +16,7 @@ Certificate Updater is a containerized automatic SSL/TLS certificate manager usi
 ## Quick Start
 
 1. Create a `.env` file with your configuration:
+
    ```env
    DATA_DIR=/path/to/data
    CERT_UID=1000
@@ -23,10 +24,12 @@ Certificate Updater is a containerized automatic SSL/TLS certificate manager usi
    TZ=UTC
    ```
 2. Start the init container (creates directories and SSH keys):
+
    ```bash
    docker compose up -d cert-updater-init
    ```
 3. Copy `config/settings.yml.example` to your data directory and edit:
+
    ```bash
    mkdir -p ${DATA_DIR}/cert-updater/config
    cp config/settings.yml.example ${DATA_DIR}/cert-updater/config/settings.yml
@@ -34,28 +37,35 @@ Certificate Updater is a containerized automatic SSL/TLS certificate manager usi
    ```
 4. Add the generated SSH public key to your target hosts (see "Target Host SSH Setup" below). The worker runs an initial sync when it starts, so install the key before starting the full stack if you want the first deployment to succeed.
 5. Start the stack:
+
    ```bash
    docker compose up -d
    ```
+
    This pulls `ghcr.io/dam-pav/cert-updater:latest` and `ghcr.io/dam-pav/cert-updater-web:latest`.
 6. Sign in to the dashboard with the default admin credentials and replace them:
+
    - Username: `admin`
    - Password: `admin`
 
 ## Web Dashboard
 
-A built-in dashboard provides a real-time overview of all certificate statuses. Access it at:
+A built-in authenticated dashboard provides certificate and deployment target visibility. Access it at:
 
 ```
 http://localhost:8080
 ```
 
-The dashboard displays:
-- **Summary cards**: Total, valid, expired, and unknown certificates
-- **Domain table**: Domain name, target host, DNS provider, status, last checked, last updated, and next renewal date
+The dashboard includes:
+
+- **Domains view**: Domain name, target host, DNS provider, certificate status, last checked time, last update time, and next update time
+- **Hosts view**: Host name, SSH URL, diagnostic status, transfer method, assigned domain count, and reload command
+- **Host diagnostics**: Shows `Ready` when SSH works and the configured destination accepts a write test, `MissingKey` when SSH authentication fails because the public key is not installed, `Unreachable` when the host cannot be contacted, and red fallback statuses such as `NoDest` or `Error` for other deployment-readiness problems
+- **Settings editor**: Admin users can edit `settings.yml` in the browser with validation before saving
 - **SSH Key helper**: Shows the generated public key and copyable setup commands for configured target hosts
+- **User management**: Admin users can manage all dashboard users; viewer users can change only their own password
 - **Manual sync**: Admin users can request an immediate backend sync from the dashboard
-- **Auto-refresh**: Updates every 60 seconds
+- **Auto-refresh**: Certificate and host data refresh every 60 seconds
 - **Manual refresh**: Click the floating refresh button
 - **Role-based access**: `viewer` users can view certificate status, host summaries, the SSH key helper, and their own user row; `admin` users can also edit `settings.yml`, manage all users, and request manual syncs
 
@@ -64,6 +74,8 @@ Customize the port with the `WEB_PORT` environment variable:
 ```
 WEB_PORT=80
 ```
+
+> Warning: this WebUI does not provide its own SSL infrastructure. Do not expose this WebUI to untrusted networks. Put it behind a reverse proxy.
 
 ### Dashboard Users
 
@@ -97,6 +109,7 @@ Then edit `${DATA_DIR}/cert-updater/config/users.json`:
 ```
 
 Supported roles are:
+
 - `viewer`: can authenticate, view certificate status and host summaries, open the SSH key helper, and change their own password
 - `admin`: can do everything a viewer can, plus read/write `settings.yml`, manage all users, and request manual syncs from the dashboard
 
@@ -119,33 +132,33 @@ If you later find you need to make your own modifications to the compose file, y
 
 ### Required
 
-| Variable | Description |
-|----------|-------------|
-| `DATA_DIR` | Base directory for persistent data (e.g., `/opt/docker-data`) |
-| `CERT_UID` | User ID for the updater container (e.g., `1000`) |
-| `CERT_GID` | Group ID for the updater container (e.g., `1000`) |
+| Variable     | Description                                                    |
+| ------------ | -------------------------------------------------------------- |
+| `DATA_DIR` | Base directory for persistent data (e.g.,`/opt/docker-data`) |
+| `CERT_UID` | User ID for the updater container (e.g.,`1000`)              |
+| `CERT_GID` | Group ID for the updater container (e.g.,`1000`)             |
 
 ### Required for Cloudflare provider
 
-| Variable | Description |
-|----------|-------------|
-| `CF_API_TOKEN` | Cloudflare API token |
+| Variable          | Description           |
+| ----------------- | --------------------- |
+| `CF_API_TOKEN`  | Cloudflare API token  |
 | `CF_ACCOUNT_ID` | Cloudflare Account ID |
 
 ### Required for DuckDNS provider
 
-| Variable | Description |
-|----------|-------------|
+| Variable          | Description                      |
+| ----------------- | -------------------------------- |
 | `DUCKDNS_TOKEN` | DuckDNS token (if using DuckDNS) |
 
 ### Optional
 
-| Variable | Description |
-|----------|-------------|
-| `ACME_ACCOUNT_EMAIL` | Email for Let's Encrypt notifications (expiry warnings) |
-| `SYNC_INTERVAL_SECONDS` | Fallback delay between sync attempts when ACME renewal metadata is unavailable (default: `86400`) |
-| `WEB_PORT` | Port for the web dashboard (default: `8080`) |
-| `TZ` | Timezone (default: `UTC`). Preferably use your own timezone. |
+| Variable                  | Description                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| `ACME_ACCOUNT_EMAIL`    | Email for Let's Encrypt notifications (expiry warnings)                                            |
+| `SYNC_INTERVAL_SECONDS` | Fallback delay between sync attempts when ACME renewal metadata is unavailable (default:`86400`) |
+| `WEB_PORT`              | Port for the web dashboard (default:`8080`)                                                      |
+| `TZ`                    | Timezone (default:`UTC`). Preferably use your own timezone.                                      |
 
 ### Example `.env`
 
@@ -164,9 +177,9 @@ CF_ACCOUNT_ID=your-cloudflare-account-id
 
 The published container images include runnable manifests for:
 
-| Architecture | Docker platform |
-|--------------|-----------------|
-| x86_64 / AMD64 | `linux/amd64` |
+| Architecture    | Docker platform |
+| --------------- | --------------- |
+| x86_64 / AMD64  | `linux/amd64` |
 | ARM64 / AArch64 | `linux/arm64` |
 
 This means you can run the stack on a Raspberry Pi with a 64-bit OS. This has been tested with Ubuntu Server 64-bit running on Raspberry Pi 3B. Please report other setups, whether your deployment is successful or not.
@@ -191,6 +204,7 @@ cert-updater/
 ```
 
 ## settings.yml Configuration
+
 `settings.yml` represents your infrastructure. Hosts contain and serve the certificates, so define their SSH destination and reload command. Certificates represent the domains you are maintaining: specify the domain name, the host that receives the certificate files, the destination directory, the key strength, and the DNS challenge settings.
 
 Instead of literal token and account ID values, use environment variable references such as `${CF_API_TOKEN}` or `${DUCKDNS_TOKEN}`.
@@ -204,7 +218,7 @@ The configuration has three top-level sections: `webui` (dashboard options), `ho
 ```yaml
 # Web dashboard options
 webui:
-  subpath: ""                      # Optional; use certs to serve the UI at /certs/
+  subpath: ""                     # Optional; use certs to serve the UI at /certs/
 
 # Host definitions - reusable across domains
 hosts:
@@ -215,6 +229,11 @@ hosts:
 
   vps:
     url: deploy@vps.example.com
+    transfer: rsync
+    reload: systemctl reload nginx
+
+  my-uncles-lawnmower:            # define your own host identifiers
+    url: access@uncle.org
     transfer: rsync
     reload: systemctl reload nginx
 
@@ -237,6 +256,14 @@ domains:
       provider: duckdns
       env:
         DuckDNS_Token: ${DUCKDNS_TOKEN}
+  - name: uncle.duckdns.org
+    keylength: ec-256
+    host: my-uncles-lawnmower     # the schema enforces reference to the defined hosts
+    dest: /uncle/example
+    dns:
+      provider: duckdns
+      env:
+        DuckDNS_Token: ${DUCKDNS_TOKEN}        
 ```
 
 ### DNS Providers
@@ -244,16 +271,18 @@ domains:
 The `dns.provider` value is passed to acme.sh as `dns_<provider>`. The dashboard editor and validation schema currently allow these providers:
 
 Currently supported:
-| Provider | `dns.provider` | Required Environment Variables |
-|----------|----------------|-------------------------------|
-| Cloudflare | `cf` | `CF_API_TOKEN`, `CF_ACCOUNT_ID` |
-| DuckDNS | `duckdns` | `DUCKDNS_TOKEN` |
+
+| Provider   | `dns.provider` | Required Environment Variables      |
+| ---------- | ---------------- | ----------------------------------- |
+| Cloudflare | `cf`           | `CF_API_TOKEN`, `CF_ACCOUNT_ID` |
+| DuckDNS    | `duckdns`      | `DUCKDNS_TOKEN`                   |
 
 Other acme.sh DNS providers are not enabled in the dashboard schema yet. Support could be added in future releases:
-| Provider | `dns.provider` | Required Environment Variables |
-|----------|----------------|-------------------------------|
-| Amazon Route 53 | `aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
-| DigitalOcean | `dgon` | `DO_API_KEY` |
+
+| Provider        | `dns.provider` | Required Environment Variables                   |
+| --------------- | ---------------- | ------------------------------------------------ |
+| Amazon Route 53 | `aws`          | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| DigitalOcean    | `dgon`         | `DO_API_KEY`                                   |
 
 See the [acme.sh DNS API documentation](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) for upstream provider names if you want to extend this project.
 
@@ -299,12 +328,14 @@ ssh user@target-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA
 #### OpenWrt / ASUS-WRT Merlin (Dropbear)
 
 For the root user (UID 0):
+
 ```bash
 ssh root@router "cat >> /etc/dropbear/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ssh root@router "chmod 600 /etc/dropbear/authorized_keys"
 ```
 
 For non-root users:
+
 ```bash
 ssh user@router "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ssh user@router "chmod 600 ~/.ssh/authorized_keys"
@@ -319,6 +350,7 @@ Run the test from the Docker host:
 ```bash
 ssh -i ${DATA_DIR}/cert-updater/ssh/id_ed25519 user@target-host "echo success"
 ```
+
 A successful deployment WILL NOT ask for password.
 
 ## Sync Schedule
@@ -372,6 +404,7 @@ docker exec cert-updater acme.sh --renew -d example.com --ecc --force
 ### Container Keeps Restarting
 
 Check logs for errors:
+
 ```bash
 docker logs cert-updater
 ```
