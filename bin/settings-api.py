@@ -31,6 +31,7 @@ DEFAULT_PASSWORD = "admin"
 DEFAULT_ROLE = "admin"
 HASH_ALGORITHM = "pbkdf2_sha256"
 HASH_ITERATIONS = 260000
+HOST_DIAGNOSTIC_STATUSES = None
 
 
 def load_schema():
@@ -152,6 +153,21 @@ def users_for_actor(actor):
 
 
 def log_host_diagnostic(host_name, status, reason):
+    global HOST_DIAGNOSTIC_STATUSES
+    if HOST_DIAGNOSTIC_STATUSES is None:
+        HOST_DIAGNOSTIC_STATUSES = {}
+        try:
+            with open(STATUS_PATH, "r") as f:
+                persisted_status = json.load(f)
+            for host in persisted_status.get("hosts", []):
+                if isinstance(host, dict) and isinstance(host.get("name"), str):
+                    HOST_DIAGNOSTIC_STATUSES[host["name"]] = host.get("operational")
+        except (FileNotFoundError, OSError, ValueError, AttributeError):
+            pass
+
+    if HOST_DIAGNOSTIC_STATUSES.get(host_name) == status:
+        return
+    HOST_DIAGNOSTIC_STATUSES[host_name] = status
     print(f"Host diagnostic {host_name}: {status} ({reason})", file=sys.stderr, flush=True)
 
 

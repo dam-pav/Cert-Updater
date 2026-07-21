@@ -29,6 +29,10 @@ shell_quote() {
 }
 
 log_host_diagnostic() {
+  previous_status=$(HOST_NAME=$1 yq e '.hosts[]? | select(.name == strenv(HOST_NAME)) | .operational' "$STATUS_FILE" 2>/dev/null | head -n 1)
+  if [ "$previous_status" = "$2" ]; then
+    return
+  fi
   printf 'Host diagnostic %s: %s (%s)\n' "$1" "$2" "$3" >&2
 }
 
