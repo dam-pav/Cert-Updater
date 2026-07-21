@@ -104,12 +104,13 @@
                             <th>Status</th>
                             <th class="hide-mobile">Last Checked</th>
                             <th>Last Updated</th>
+                            <th>Expires On</th>
                             <th>Next Update</th>
                         </tr>
                     </thead>
                     <tbody id="domainTable">
                         <tr>
-                            <td colspan="7">
+                            <td colspan="8">
                                 <div class="loading">
                                     <div class="spinner"></div>
                                     Loading certificate status...
@@ -307,7 +308,7 @@
 
             if (!domains.length) {
                 tbody.innerHTML = `
-                    <tr><td colspan="7">
+                    <tr><td colspan="8">
                         <div class="empty-state">
                             <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                                 <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 5.25h9a2.25 2.25 0 0 0 2.25-2.25V8.25a2.25 2.25 0 0 0-2.25-2.25h-9a2.25 2.25 0 0 0-2.25 2.25v5.25a2.25 2.25 0 0 0 2.25 2.25Z"/>
@@ -326,6 +327,7 @@
                     <td><span class="status-badge ${['valid', 'expired', 'unknown'].includes(d.status) ? d.status : 'unknown'}"><span class="status-dot"></span>${escapeHtml(d.status || 'unknown')}</span></td>
                     <td class="datetime hide-mobile">${formatDateTime(d.last_checked)}</td>
                     <td class="datetime">${formatDateTime(d.last_updated)}</td>
+                    <td class="datetime">${formatDateTime(d.expires_on)}</td>
                     <td class="datetime">${formatDateTime(d.next_update)}</td>
                 </tr>
             `).join('');
@@ -826,6 +828,7 @@
                     status: status.status || 'unknown',
                     last_checked: status.last_checked || '',
                     last_updated: status.last_updated || '',
+                    expires_on: status.expires_on || '',
                     next_update: status.next_update || ''
                 };
             });
@@ -868,7 +871,7 @@
                 }
             } catch (err) {
                 document.getElementById('domainTable').innerHTML = `
-                    <tr><td colspan="7"><div class="error-msg">Failed to load status: ${escapeHtml(err.message)}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
+                    <tr><td colspan="8"><div class="error-msg">Failed to load status: ${escapeHtml(err.message)}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
                 document.getElementById('hostTable').innerHTML = `
                     <tr><td colspan="6"><div class="error-msg">Failed to load hosts: ${escapeHtml(err.message)}</div></td></tr>`;
             }

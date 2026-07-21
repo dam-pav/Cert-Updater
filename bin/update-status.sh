@@ -136,8 +136,17 @@ else
   
     last_updated=""
     next_update=""
+    expires_on=""
     next_renewal=""
     renewal_epoch=""
+
+    cert_file="/cert-updater/export/${domain}/cert.pem"
+    if [ -r "$cert_file" ]; then
+      not_after=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed 's/^notAfter=//')
+      if [ -n "$not_after" ]; then
+        expires_on=$(date -u -d "$not_after" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+      fi
+    fi
   
     if [ -r "$cert_conf" ]; then
       # Extract Le_NextRenewTime
@@ -148,8 +157,12 @@ else
         next_update=$(date -u -d "@$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
         renewal_epoch=$next_renewal
       
-        # Get issue time for last_updated
-        issue_time=$(sed -n "s/^Le_IssueTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
+        # acme.sh records the successful issue/renewal time as Le_CertCreateTime.
+        # Keep Le_IssueTime as a fallback for older or externally generated state.
+        issue_time=$(sed -n "s/^Le_CertCreateTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
+        if [ -z "$issue_time" ]; then
+          issue_time=$(sed -n "s/^Le_IssueTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
+        fi
         if [ -n "$issue_time" ] && [ "$issue_time" -gt 0 ] 2>/dev/null; then
           last_updated=$(date -u -d "@$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
         fi
@@ -173,6 +186,7 @@ else
       "provider": $(json_string "$dns_provider"),
       "last_checked": $(json_string "$NOW"),
       "last_updated": $(json_string "$last_updated"),
+      "expires_on": $(json_string "$expires_on"),
       "next_update": $(json_string "$next_update"),
       "status": $(json_string "$status")
     }
