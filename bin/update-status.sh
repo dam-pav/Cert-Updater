@@ -36,6 +36,36 @@ log_host_diagnostic() {
   printf 'Host diagnostic %s: %s (%s)\n' "$1" "$2" "$3" >&2
 }
 
+certificate_expiry() {
+  cert_file=$1
+
+  [ -r "$cert_file" ] || return 1
+
+  # OpenSSL versions that support ISO output avoid an extra parsing step.
+  expiry=$(openssl x509 -in "$cert_file" -noout -enddate -dateopt iso_8601 2>/dev/null |
+    sed -n 's/^notAfter=//p')
+  if [ -n "$expiry" ]; then
+    printf '%s\n' "$expiry" | sed 's/ /T/'
+    return 0
+  fi
+
+  # BusyBox date cannot parse OpenSSL's default "Jul 22 12:34:56 2026 GMT"
+  # output, so normalize its fixed UTC representation without calling date.
+  not_after=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed -n 's/^notAfter=//p')
+  [ -n "$not_after" ] || return 1
+  set -- $not_after
+  [ "$#" -eq 5 ] && [ "$5" = "GMT" ] || return 1
+  case "$1" in
+    Jan) month=1 ;; Feb) month=2 ;; Mar) month=3 ;; Apr) month=4 ;;
+    May) month=5 ;; Jun) month=6 ;; Jul) month=7 ;; Aug) month=8 ;;
+    Sep) month=9 ;; Oct) month=10 ;; Nov) month=11 ;; Dec) month=12 ;;
+    *) return 1 ;;
+  esac
+  day=${2#0}
+  case "$day:$3:$4" in *[!0-9:]*|::*|*:) return 1 ;; esac
+  printf '%s-%02d-%02dT%sZ\n' "$4" "$month" "$day" "$3"
+}
+
 diagnose_host() {
   host_name=$1
   host_url=$2
@@ -140,13 +170,19 @@ else
     next_renewal=""
     renewal_epoch=""
 
-    cert_file="/cert-updater/export/${domain}/cert.pem"
-    if [ -r "$cert_file" ]; then
-      not_after=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed 's/^notAfter=//')
-      if [ -n "$not_after" ]; then
-        expires_on=$(date -u -d "$not_after" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+    # Prefer the deployed certificate, then fall back to acme.sh's state. The
+    # latter ensures a skipped (not-yet-due) renewal still refreshes expiry.
+    for cert_file in \
+      "/cert-updater/export/${domain}/cert.pem" \
+      "/cert-updater/state/${domain}_ecc/${domain}.cer" \
+      "/cert-updater/state/${domain}_ecc/fullchain.cer" \
+      "/cert-updater/state/${domain}/${domain}.cer" \
+      "/cert-updater/state/${domain}/fullchain.cer"; do
+      expires_on=$(certificate_expiry "$cert_file" || true)
+      if [ -n "$expires_on" ]; then
+        break
       fi
-    fi
+    done
   
     if [ -r "$cert_conf" ]; then
       # Extract Le_NextRenewTime
