@@ -52,9 +52,9 @@ fi
 # Register ACME account if email is provided and not already registered
 # This is optional for Let's Encrypt but recommended for expiry notifications
 if [ -n "${ACME_ACCOUNT_EMAIL:-}" ]; then
-  if ! acme.sh --show-account >/dev/null 2>&1; then
+  if ! acme.sh --show-account --server letsencrypt >/dev/null 2>&1; then
     echo "Registering ACME account for $ACME_ACCOUNT_EMAIL"
-    acme.sh --register-account -m "$ACME_ACCOUNT_EMAIL"
+    acme.sh --register-account -m "$ACME_ACCOUNT_EMAIL" --server letsencrypt
   fi
 fi
 

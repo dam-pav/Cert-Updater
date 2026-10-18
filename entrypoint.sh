@@ -73,7 +73,11 @@ refresh_sync_interval() {
   fi
 
   if [ "$earliest_renewal" -le "$now" ]; then
-    SYNC_INTERVAL_SECONDS=1
+    # A failed renewal leaves acme.sh's previous renewal timestamp in place.
+    # Retrying every second would hammer the CA and DNS provider without
+    # changing that timestamp. Use the configured fallback before retrying.
+    SYNC_INTERVAL_SECONDS=$fallback_interval
+    log "ACME renewal time is overdue; retrying after fallback interval: ${SYNC_INTERVAL_SECONDS}s"
   else
     SYNC_INTERVAL_SECONDS=$((earliest_renewal - now))
   fi
