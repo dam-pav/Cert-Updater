@@ -117,11 +117,24 @@ while [ "$i" -lt "$domain_count" ]; do
 
   if [ -n "$dns_provider" ]; then
     issue_result=0
-    acme.sh --issue \
-      --server letsencrypt \
-      --dns "dns_${dns_provider}" \
-      -d "$domain" \
-      --keylength "$keylength" || issue_result=$?
+    # Existing acme.sh-managed certificates must go through --renew. Calling
+    # --issue for them can create fresh ACME orders on every sync, consuming
+    # issuance limits instead of respecting the normal renewal schedule.
+    if [ -f "${cert_dir}/${domain}.conf" ]; then
+      echo "  -> existing certificate found, checking renewal eligibility"
+      acme.sh --renew \
+        --server letsencrypt \
+        -d "$domain" \
+        --ecc || issue_result=$?
+    else
+      echo "  -> no managed certificate found, issuing initial certificate"
+      acme.sh --issue \
+        --server letsencrypt \
+        --dns "dns_${dns_provider}" \
+        -d "$domain" \
+        --keylength "$keylength" \
+        --ecc || issue_result=$?
+    fi
     # acme.sh returns 0=success, 2=skip (not due), other=error
     if [ "$issue_result" -eq 2 ]; then
       echo "  -> certificate not due for renewal, skipping deploy"
