@@ -256,7 +256,7 @@
                         <textarea class="copy-block" id="sshCommand" readonly></textarea>
                     </div>
                     <p class="ssh-note">
-                        Run the command from your Docker host or any machine that can SSH to the target host. The command appends the generated public key to the target user's authorized keys file; deployments then use the matching private key from inside the cert-updater container.
+                        Run the install command from your Docker host or another machine that can SSH to the target. Choose the command for the configured login user: the Dropbear /etc/dropbear/authorized_keys command is for root only. For a non-root user, install the key in that user's ~/.ssh/authorized_keys, including on Dropbear routers. Test with the updater's matching private key and BatchMode so SSH cannot silently fall back to a password.
                     </p>
                 </div>
             </div>
@@ -717,14 +717,14 @@
             }
 
             commandEl.value = [
-                '# Standard Linux / OpenSSH',
+                '# Standard Linux / OpenSSH (also use for non-root Dropbear users)',
                 `printf '%s\\n' ${shellQuote(key)} | ssh ${shellQuote(target)} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"`,
                 '',
-                '# OpenWrt / ASUS-WRT Merlin with Dropbear root login',
+                '# OpenWrt / ASUS-WRT Merlin with Dropbear root login only',
                 `printf '%s\\n' ${shellQuote(key)} | ssh ${shellQuote(target)} "mkdir -p /etc/dropbear && cat >> /etc/dropbear/authorized_keys && chmod 600 /etc/dropbear/authorized_keys"`,
                 '',
-                '# Connection test after installing the key',
-                `ssh ${shellQuote(target)} "echo success"`
+                '# Test from the Docker host using the updater private key (replace the path)',
+                `ssh -i /path/to/cert-updater/ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes ${shellQuote(target)} "echo success"`
             ].join('\n');
         }
 

@@ -327,6 +327,8 @@ ssh user@target-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA
 
 #### OpenWrt / ASUS-WRT Merlin (Dropbear)
 
+For a non-root login such as `homologue`, use the standard `~/.ssh/authorized_keys` command above. The `/etc/dropbear/authorized_keys` file below is for root login only.
+
 For the root user (UID 0):
 
 ```bash
@@ -345,10 +347,13 @@ ssh user@router "chmod 600 ~/.ssh/authorized_keys"
 
 ### 3. Test Connection
 
-Run the test from the Docker host:
+Run the test from the Docker host with the updater's private key. `BatchMode=yes` makes it fail instead of prompting for a password:
 
 ```bash
-ssh -i ${DATA_DIR}/cert-updater/ssh/id_ed25519 user@target-host "echo success"
+ssh -i ${DATA_DIR}/cert-updater/ssh/id_ed25519 \
+  -o IdentitiesOnly=yes \
+  -o BatchMode=yes \
+  user@target-host "echo success"
 ```
 
 A successful deployment WILL NOT ask for password.
