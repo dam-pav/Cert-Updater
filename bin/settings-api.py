@@ -622,7 +622,7 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
 
 
 def validate_against_schema(data, schema):
-    """Simple schema validator supporting type, required, enum, properties, items."""
+    """Validate types, integer bounds, required fields, enums, and nested values."""
     errors = []
     if schema is True:
         return errors
@@ -641,6 +641,15 @@ def validate_against_schema(data, schema):
         elif expected == "string" and not isinstance(data, str):
             errors.append(f"Expected string, got {type(data).__name__}")
             return errors
+        elif expected == "integer" and (type(data) is not int):
+            errors.append(f"Expected integer, got {type(data).__name__}")
+            return errors
+
+    if schema.get("type") == "integer":
+        if "minimum" in schema and data < schema["minimum"]:
+            errors.append(f"Value must be at least {schema['minimum']}")
+        if "maximum" in schema and data > schema["maximum"]:
+            errors.append(f"Value must be at most {schema['maximum']}")
 
     if schema.get("type") == "string" and "pattern" in schema and isinstance(data, str):
         if not re.fullmatch(schema["pattern"], data):

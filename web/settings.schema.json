@@ -4,6 +4,13 @@
   "type": "object",
   "required": ["hosts", "domains"],
   "properties": {
+    "renewal_margin_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 365,
+      "default": 30,
+      "description": "Start running acme.sh this many days before certificate expiry. Applies to all certificates; acme.sh decides renewal eligibility."
+    },
     "webui": {
       "type": "object",
       "properties": {

@@ -156,7 +156,7 @@ If you later find you need to make your own modifications to the compose file, y
 | Variable                  | Description                                                                                        |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
 | `ACME_ACCOUNT_EMAIL`    | Email for Let's Encrypt notifications (expiry warnings)                                            |
-| `SYNC_INTERVAL_SECONDS` | Fallback delay between sync attempts when ACME renewal metadata is unavailable (default:`86400`) |
+| `SYNC_INTERVAL_SECONDS` | Delay between checks inside the renewal margin or when certificate expiry is unavailable (default:`86400`) |
 | `WEB_PORT`              | Port for the web dashboard (default:`8080`)                                                      |
 | `TZ`                    | Timezone (default:`UTC`). Preferably use your own timezone.                                      |
 
@@ -213,9 +213,12 @@ Place your `settings.yml` in `${DATA_DIR}/cert-updater/config/`. See `config/set
 
 ### Structure
 
-The configuration has three top-level sections: `webui` (dashboard options), `hosts` (deployment targets), and `domains` (certificates). The `webui` section is optional.
+The configuration contains `hosts` (deployment targets), `domains` (certificates), optional `webui` dashboard options, and the optional shared `renewal_margin_days` setting.
 
 ```yaml
+# Start checking with acme.sh before expiry (optional; default: 30 days)
+renewal_margin_days: 30
+
 # Web dashboard options
 webui:
   subpath: ""                     # Optional; use certs to serve the UI at /certs/
@@ -362,11 +365,21 @@ A successful deployment WILL NOT ask for password.
 
 The worker performs one sync immediately on startup, then keeps running a lightweight shell loop inside the container.
 
-After each sync, the loop reads acme.sh renewal metadata for every configured domain and sleeps until the earliest reported renewal time. acme.sh still decides whether a certificate is actually due for renewal, so non-due certificates are skipped safely.
+After each sync, the worker reads certificate expiry dates and schedules the next check using the shared renewal margin. At each check it invokes acme.sh normally. **acme.sh decides whether a certificate is eligible for renewal** and can skip it. A scheduled check is not a promise that renewal will occur.
+
+Set the top-level `renewal_margin_days` in `settings.yml` to choose how many days before expiry the worker starts checking with acme.sh. It applies to all certificates, accepts integers from 1 to 365, and defaults to **30**. For example:
+
+```yaml
+renewal_margin_days: 14
+```
+
+This starts checks 14 days before each certificate's actual expiry, regardless of when it was issued or its lifetime. A larger margin starts checks earlier; a smaller margin starts them closer to expiry. Once inside the margin, checks repeat every `SYNC_INTERVAL_SECONDS`, including after acme.sh skips renewal or a renewal attempt fails. The margin only controls when this worker runs acme.sh; it does not change acme.sh's eligibility rules, issuer-suggested ARI schedule, or renewal metadata, and does not force renewal. The dashboard's **Next Check** column shows the planned check, not a guaranteed renewal time.
+
+After saving a changed margin, click **Run Now** or restart the worker to recalculate the next check. `SYNC_INTERVAL_SECONDS` controls repeated checks inside the margin and fallback checks when certificate expiry is unavailable; it does not change the margin.
 
 Admin users can click **Run Now** in the dashboard to request an immediate sync. This interrupts the current sleep and runs the normal backend sync path once; it does not automatically run every time `settings.yml` is saved.
 
-If renewal metadata is not available yet, the worker falls back to `SYNC_INTERVAL_SECONDS`. To change that fallback, set it in your `.env`:
+To change the interval between repeated or fallback checks, set `SYNC_INTERVAL_SECONDS` in your `.env`:
 
 ```
 SYNC_INTERVAL_SECONDS=86400
@@ -400,7 +413,7 @@ Use `transfer: scp` in `settings.yml` for minimal systems without sftp-server.
 
 ### Certificate Not Renewing
 
-acme.sh skips renewal if the certificate is not due (>30 days remaining). This is normal behavior. Force renewal with:
+acme.sh can skip a check when its own rules say renewal is not yet due. Increasing `renewal_margin_days` starts checks earlier but does not make a certificate eligible for renewal. To explicitly force renewal manually:
 
 ```bash
 docker exec cert-updater acme.sh --renew -d example.com --ecc --force

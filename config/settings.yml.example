@@ -1,3 +1,7 @@
+# Start checking with acme.sh this many days before expiry (default: 30)
+# acme.sh decides whether renewal is due.
+renewal_margin_days: 30
+
 # Web dashboard options
 webui:
   subpath: ""              # optional; use certs to serve the UI at /certs/

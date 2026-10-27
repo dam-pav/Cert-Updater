@@ -7,6 +7,8 @@ NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # Get current timestamp in seconds for calculations
 NOW_EPOCH=$(date -u +%s)
 
+. /cert-updater/bin/renewal-schedule.sh
+
 die() {
   echo "ERROR: $1" >&2
 }
@@ -16,6 +18,8 @@ if [ ! -r "$CONFIG" ]; then
   die "$CONFIG is not readable."
   exit 1
 fi
+
+load_renewal_margin "$CONFIG" || exit 1
 
 domain_count=$(yq e '.domains // [] | length' "$CONFIG" 2>/dev/null || echo "0")
 host_count=$(yq e '.hosts // {} | keys | length' "$CONFIG" 2>/dev/null || echo "0")
@@ -34,36 +38,6 @@ log_host_diagnostic() {
     return
   fi
   printf 'Host diagnostic %s: %s (%s)\n' "$1" "$2" "$3" >&2
-}
-
-certificate_expiry() {
-  cert_file=$1
-
-  [ -r "$cert_file" ] || return 1
-
-  # OpenSSL versions that support ISO output avoid an extra parsing step.
-  expiry=$(openssl x509 -in "$cert_file" -noout -enddate -dateopt iso_8601 2>/dev/null |
-    sed -n 's/^notAfter=//p')
-  if [ -n "$expiry" ]; then
-    printf '%s\n' "$expiry" | sed 's/ /T/'
-    return 0
-  fi
-
-  # BusyBox date cannot parse OpenSSL's default "Jul 22 12:34:56 2026 GMT"
-  # output, so normalize its fixed UTC representation without calling date.
-  not_after=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | sed -n 's/^notAfter=//p')
-  [ -n "$not_after" ] || return 1
-  set -- $not_after
-  [ "$#" -eq 5 ] && [ "$5" = "GMT" ] || return 1
-  case "$1" in
-    Jan) month=1 ;; Feb) month=2 ;; Mar) month=3 ;; Apr) month=4 ;;
-    May) month=5 ;; Jun) month=6 ;; Jul) month=7 ;; Aug) month=8 ;;
-    Sep) month=9 ;; Oct) month=10 ;; Nov) month=11 ;; Dec) month=12 ;;
-    *) return 1 ;;
-  esac
-  day=${2#0}
-  case "$day:$3:$4" in *[!0-9:]*|::*|*:) return 1 ;; esac
-  printf '%s-%02d-%02dT%sZ\n' "$4" "$month" "$day" "$3"
 }
 
 diagnose_host() {
@@ -161,14 +135,13 @@ else
     host_name=$(yq e "$domain_path.host // \"\"" "$CONFIG")
     dns_provider=$(yq e "$domain_path.dns.provider // \"\"" "$CONFIG")
 
-    # Get renewal time from acme.sh config
+    # Read issuance metadata without changing acme.sh renewal eligibility.
     cert_conf="/cert-updater/state/${domain}_ecc/${domain}.conf"
   
     last_updated=""
     next_update=""
     expires_on=""
-    next_renewal=""
-    renewal_epoch=""
+    expiry_epoch=""
 
     # Prefer the deployed certificate, then fall back to acme.sh's state. The
     # latter ensures a skipped (not-yet-due) renewal still refreshes expiry.
@@ -185,30 +158,29 @@ else
     done
   
     if [ -r "$cert_conf" ]; then
-      # Extract Le_NextRenewTime
-      next_renewal=$(sed -n "s/^Le_NextRenewTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
-    
-      if [ -n "$next_renewal" ] && [ "$next_renewal" -gt 0 ] 2>/dev/null; then
-        # Next renewal is in the future
-        next_update=$(date -u -d "@$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$next_renewal" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
-        renewal_epoch=$next_renewal
-      
-        # acme.sh records the successful issue/renewal time as Le_CertCreateTime.
-        # Keep Le_IssueTime as a fallback for older or externally generated state.
-        issue_time=$(sed -n "s/^Le_CertCreateTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
-        if [ -z "$issue_time" ]; then
-          issue_time=$(sed -n "s/^Le_IssueTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
-        fi
-        if [ -n "$issue_time" ] && [ "$issue_time" -gt 0 ] 2>/dev/null; then
-          last_updated=$(date -u -d "@$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
-        fi
+      # acme.sh records the successful issue/renewal time as Le_CertCreateTime.
+      # Keep Le_IssueTime as a fallback for older or externally generated state.
+      issue_time=$(sed -n "s/^Le_CertCreateTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
+      if [ -z "$issue_time" ]; then
+        issue_time=$(sed -n "s/^Le_IssueTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$cert_conf" | head -n 1)
+      fi
+      if [ -n "$issue_time" ] && [ "$issue_time" -gt 0 ] 2>/dev/null; then
+        last_updated=$(date -u -d "@$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$issue_time" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
       fi
     fi
-  
-    # Determine status
-    if [ -z "$next_renewal" ] || [ "$next_renewal" -eq 0 ] 2>/dev/null; then
+
+    if [ -n "$expires_on" ]; then
+      expiry_epoch=$(date -u -d "$(printf '%s' "$expires_on" | sed 's/T/ /; s/Z$//')" +%s 2>/dev/null || true)
+      if [ -n "$expiry_epoch" ]; then
+        next_check=$(next_check_time "$expiry_epoch" "$NOW_EPOCH" "${FALLBACK_SYNC_INTERVAL_SECONDS:-${SYNC_INTERVAL_SECONDS:-86400}}")
+        next_update=$(date -u -d "@$next_check" +"%Y-%m-%dT%H:%M:%SZ")
+      fi
+    fi
+
+    # Determine status from certificate expiry, not renewal eligibility.
+    if [ -z "$expiry_epoch" ]; then
       status="unknown"
-    elif [ "$renewal_epoch" -le "$NOW_EPOCH" ] 2>/dev/null; then
+    elif [ "$expiry_epoch" -le "$NOW_EPOCH" ] 2>/dev/null; then
       status="expired"
     else
       status="valid"

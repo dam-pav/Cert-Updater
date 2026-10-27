@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+. /cert-updater/bin/renewal-schedule.sh
+
 log() {
   echo "[cert-updater] $(date -u +"%Y-%m-%dT%H:%M:%SZ") $*"
 }
@@ -28,61 +30,50 @@ format_duration() {
   echo "${days}d ${hours}h ${minutes}m ${seconds}s"
 }
 
-get_acme_next_renewal_time() {
-  domain=$1
-
-  for conf in "/cert-updater/state/${domain}_ecc/${domain}.conf" "/cert-updater/state/${domain}/${domain}.conf"; do
-    if [ -r "$conf" ]; then
-      next_renewal=$(sed -n "s/^Le_NextRenewTime=['\"]\{0,1\}\([0-9][0-9]*\)['\"]\{0,1\}$/\1/p" "$conf" | head -n 1)
-      if [ -n "$next_renewal" ]; then
-        echo "$next_renewal"
-        return 0
-      fi
+get_certificate_expiry_epoch() {
+  for check_cert in \
+    "/cert-updater/state/${1}_ecc/${1}.cer" \
+    "/cert-updater/state/${1}_ecc/fullchain.cer" \
+    "/cert-updater/state/${1}/${1}.cer" \
+    "/cert-updater/state/${1}/fullchain.cer" \
+    "/cert-updater/export/${1}/cert.pem"; do
+    check_expiry=$(certificate_expiry "$check_cert" || true)
+    if [ -n "$check_expiry" ]; then
+      date -u -d "$(printf '%s' "$check_expiry" | sed 's/T/ /; s/Z$//')" +%s 2>/dev/null && return 0
     fi
   done
-
   return 0
 }
 
 refresh_sync_interval() {
   fallback_interval=$1
-  earliest_renewal=
+  earliest_check=
   now=$(date -u +%s)
+  load_renewal_margin /cert-updater/config/settings.yml || return 1
   domain_count=$(yq e '.domains // [] | length' /cert-updater/config/settings.yml)
 
   i=0
   while [ "$i" -lt "$domain_count" ]; do
     domain=$(yq e ".domains[$i].name // \"\"" /cert-updater/config/settings.yml)
-    if [ -n "$domain" ]; then
-      next_renewal=$(get_acme_next_renewal_time "$domain")
-      if validate_interval "$next_renewal"; then
-        if [ -z "$earliest_renewal" ] || [ "$next_renewal" -lt "$earliest_renewal" ]; then
-          earliest_renewal=$next_renewal
-        fi
-      else
-        log "No ACME renewal time found for $domain; using fallback interval if needed"
-      fi
+    expiry_epoch=$(get_certificate_expiry_epoch "$domain")
+    if validate_interval "$expiry_epoch"; then
+      next_check=$(next_check_time "$expiry_epoch" "$now" "$fallback_interval")
+    else
+      next_check=$((now + fallback_interval))
+      log "No certificate expiry found for $domain; using fallback check interval"
+    fi
+    if [ -z "$earliest_check" ] || [ "$next_check" -lt "$earliest_check" ]; then
+      earliest_check=$next_check
     fi
     i=$((i + 1))
   done
 
-  if [ -z "$earliest_renewal" ]; then
-    SYNC_INTERVAL_SECONDS=$fallback_interval
-    log "No ACME renewal times found; next sync interval: ${SYNC_INTERVAL_SECONDS}s"
-    return 0
-  fi
-
-  if [ "$earliest_renewal" -le "$now" ]; then
-    # A failed renewal leaves acme.sh's previous renewal timestamp in place.
-    # Retrying every second would hammer the CA and DNS provider without
-    # changing that timestamp. Use the configured fallback before retrying.
-    SYNC_INTERVAL_SECONDS=$fallback_interval
-    log "ACME renewal time is overdue; retrying after fallback interval: ${SYNC_INTERVAL_SECONDS}s"
+  if [ -n "$earliest_check" ]; then
+    SYNC_INTERVAL_SECONDS=$((earliest_check - now))
   else
-    SYNC_INTERVAL_SECONDS=$((earliest_renewal - now))
+    SYNC_INTERVAL_SECONDS=$fallback_interval
   fi
-
-  log "Next sync interval set from earliest ACME renewal time: ${SYNC_INTERVAL_SECONDS}s"
+  log "Next certificate check in ${SYNC_INTERVAL_SECONDS}s (expiry margin: ${renewal_margin_days} days; acme.sh decides renewal eligibility)"
 }
 
 SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-86400}
@@ -92,7 +83,7 @@ if ! validate_interval "$SYNC_INTERVAL_SECONDS"; then
   exit 1
 fi
 
-FALLBACK_SYNC_INTERVAL_SECONDS=$SYNC_INTERVAL_SECONDS
+export FALLBACK_SYNC_INTERVAL_SECONDS=$SYNC_INTERVAL_SECONDS
 
 stop_requested=0
 force_sync_requested=0
@@ -140,12 +131,14 @@ if [ ! -f /cert-updater/config/settings.yml ]; then
   exit 1
 fi
 
+load_renewal_margin /cert-updater/config/settings.yml
+
 log "Running initial certificate sync"
 /cert-updater/bin/sync-certs.sh
 
 log "Initial sync complete"
 refresh_sync_interval "$FALLBACK_SYNC_INTERVAL_SECONDS"
-log "Starting internal sync loop (fallback interval: $(format_duration "$SYNC_INTERVAL_SECONDS"))"
+log "Starting internal sync loop (fallback interval: $(format_duration "$FALLBACK_SYNC_INTERVAL_SECONDS"))"
 
 while [ "$stop_requested" -eq 0 ]; do
   if [ "$force_sync_requested" -eq 0 ]; then

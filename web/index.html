@@ -104,7 +104,7 @@
                             <th>Status</th>
                             <th>Last Updated</th>
                             <th>Expires On</th>
-                            <th>Next Update</th>
+                            <th title="Next scheduled check; acme.sh decides whether renewal is due">Next Check</th>
                         </tr>
                     </thead>
                     <tbody id="domainTable">
@@ -1089,9 +1089,21 @@
 
         if (schema.type) {
             const actualType = describeType(data);
-            if (actualType !== schema.type) {
+            const typeMatches = schema.type === 'integer'
+                ? Number.isSafeInteger(data)
+                : actualType === schema.type;
+            if (!typeMatches) {
                 errors.push({ path, kind: 'value', message: `${location}: expected ${schema.type}, got ${actualType}` });
                 return errors;
+            }
+        }
+
+        if (schema.type === 'integer') {
+            if (schema.minimum !== undefined && data < schema.minimum) {
+                errors.push({ path, kind: 'value', message: `${location}: value must be at least ${schema.minimum}` });
+            }
+            if (schema.maximum !== undefined && data > schema.maximum) {
+                errors.push({ path, kind: 'value', message: `${location}: value must be at most ${schema.maximum}` });
             }
         }
 

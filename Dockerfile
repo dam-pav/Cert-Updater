@@ -42,6 +42,7 @@ RUN mkdir -p \
 COPY bin/sync-certs.sh /cert-updater/bin/sync-certs.sh
 COPY bin/deploy.sh     /cert-updater/bin/deploy.sh
 COPY bin/update-status.sh /cert-updater/bin/update-status.sh
+COPY bin/renewal-schedule.sh /cert-updater/bin/renewal-schedule.sh
 COPY bin/settings-api.py /cert-updater/bin/settings-api.py
 COPY bin/hash-password.py /cert-updater/bin/hash-password.py
 COPY entrypoint.sh    /entrypoint.sh
