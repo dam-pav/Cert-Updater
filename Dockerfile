@@ -42,11 +42,13 @@ RUN mkdir -p \
 # -------------------------
 COPY bin/sync-certs.sh /cert-updater/bin/sync-certs.sh
 COPY bin/deploy.sh     /cert-updater/bin/deploy.sh
+COPY bin/deployment-state.sh /cert-updater/bin/deployment-state.sh
 COPY bin/update-status.sh /cert-updater/bin/update-status.sh
 COPY bin/renewal-schedule.sh /cert-updater/bin/renewal-schedule.sh
 COPY bin/settings-api.py /cert-updater/bin/settings-api.py
 COPY bin/hash-password.py /cert-updater/bin/hash-password.py
 COPY entrypoint.sh    /entrypoint.sh
+COPY VERSION /cert-updater/VERSION
 
 RUN chmod +x /cert-updater/bin/*.sh /cert-updater/bin/hash-password.py /entrypoint.sh
 
@@ -54,6 +56,7 @@ RUN chmod +x /cert-updater/bin/*.sh /cert-updater/bin/hash-password.py /entrypoi
 # Web dashboard
 # -------------------------
 COPY web/ /cert-updater/web/
+COPY VERSION /cert-updater/web/VERSION
 
 # -------------------------
 # Entrypoint

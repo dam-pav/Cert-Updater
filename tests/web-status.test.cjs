@@ -31,7 +31,7 @@ test('a valid local certificate exposes SSH rejection on the default page', () =
     const { context, elements } = dashboard();
     const hosts = [{ name: 'router', operational: 'MissingKey' }];
     const domains = context.mergeDomainStatus([{ name: 'jelly.example.com', host: 'router' }],
-        [{ name: 'jelly.example.com', status: 'valid' }]);
+        [{ name: 'jelly.example.com', deployment: { remote_status: 'valid' } }]);
     context.renderTable(domains, hosts);
     context.renderTabAttention(domains, hosts, true);
     context.renderHostsTable(hosts);
@@ -49,13 +49,13 @@ test('failed deployment remains visible when SSH recovers and clears after retry
     const config = [{ name: 'jelly.example.com', host: 'router' }];
     for (const pending of [true, false]) {
         const domains = context.mergeDomainStatus(config,
-            [{ name: 'jelly.example.com', status: 'valid', deploy_pending: pending }]);
+            [{ name: 'jelly.example.com', deploy_pending: pending,
+                deployment: { remote_status: 'valid', deployment_status: 'current' } }]);
         context.renderTable(domains, hosts);
         context.renderTabAttention(domains, hosts, true);
         assert.equal(elements.domainsAttention.hidden, !pending);
         assert.equal(elements.hostsAttention.hidden, true);
-        assert.match(elements.domainTable.innerHTML, pending ? /Deployment pending/ : /Host ready/);
-        assert.doesNotMatch(elements.domainTable.innerHTML, />Deployed</);
+        assert.match(elements.domainTable.innerHTML, pending ? /Deployment pending/ : />Deployed</);
     }
 });
 
@@ -96,7 +96,7 @@ test('certificate problems mark only Domains when the host is ready', () => {
 test('healthy data clears both tab indicators', () => {
     const { context, elements } = dashboard();
     context.renderTabAttention([], [], false, false);
-    context.renderTabAttention([{ name: 'example.com', host: 'router', status: 'valid' }],
+    context.renderTabAttention([{ name: 'example.com', host: 'router', status: 'valid', deployment_status: 'current' }],
         [{ name: 'router', operational: 'Ready' }], true);
     assert.equal(elements.domainsAttention.hidden, true);
     assert.equal(elements.hostsAttention.hidden, true);
@@ -108,4 +108,37 @@ test('diagnostic rows escape configured host and domain names', () => {
     context.renderTable([{ name: '<img src=x onerror=alert(1)>', host: '<script>alert(1)</script>' }]);
     assert.doesNotMatch(elements.domainTable.innerHTML, /<script>|<img/);
     assert.match(elements.domainTable.innerHTML, /&lt;script&gt;/);
+});
+
+test('remote expiry overrides a valid local certificate in the domain table', () => {
+    const { context, elements } = dashboard();
+    const domains = context.mergeDomainStatus([{ name: 'example.com', host: 'router' }], [{
+        name: 'example.com', status: 'valid', local_status: 'valid',
+        expires_on: '2027-02-09T18:42:39Z',
+        deployment: { remote_status: 'expired', remote_expires_on: '2026-01-01T00:00:00Z',
+            deployment_status: 'outdated', last_deployed: '2025-10-01T12:00:00Z' }
+    }]);
+    const hosts = [{ name: 'router', operational: 'Ready' }];
+    context.renderTable(domains, hosts);
+    context.renderTabAttention(domains, hosts, true);
+    assert.equal(domains[0].status, 'expired');
+    assert.equal(domains[0].expires_on, '2026-01-01T00:00:00Z');
+    assert.equal(domains[0].last_deployed, '2025-10-01T12:00:00Z');
+    assert.match(elements.domainTable.innerHTML, /Remote out of date/);
+    assert.equal(elements.domainsAttention.hidden, false);
+    assert.equal(elements.hostsAttention.hidden, true);
+});
+
+test('SSH readiness and legacy local-only snapshots cannot imply deployment success', () => {
+    const { context, elements } = dashboard();
+    const domains = context.mergeDomainStatus([{ name: 'example.com', host: 'router' }],
+        [{ name: 'example.com', status: 'valid', expires_on: '2027-02-09T18:42:39Z' }]);
+    const hosts = [{ name: 'router', operational: 'Ready' }];
+    context.renderTable(domains, hosts);
+    context.renderTabAttention(domains, hosts, true);
+    assert.equal(domains[0].status, 'unknown');
+    assert.equal(domains[0].expires_on, '');
+    assert.match(elements.domainTable.innerHTML, /Deployment unverified/);
+    assert.doesNotMatch(elements.domainTable.innerHTML, />Deployed</);
+    assert.equal(elements.domainsAttention.hidden, false);
 });

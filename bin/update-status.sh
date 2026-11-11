@@ -8,6 +8,7 @@ NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 NOW_EPOCH=$(date -u +%s)
 
 . /cert-updater/bin/renewal-schedule.sh
+. /cert-updater/bin/deployment-state.sh
 
 die() {
   echo "ERROR: $1" >&2
@@ -140,17 +141,18 @@ else
   
     last_updated=""
     next_update=""
+    next_check=""
     expires_on=""
     expiry_epoch=""
 
-    # Prefer the locally exported certificate, then fall back to acme.sh's state. The
-    # latter ensures a skipped (not-yet-due) renewal still refreshes expiry.
+    # Prefer the latest issued certificate; an older export can remain after a
+    # deployment failure. Remote validity is calculated separately below.
     for cert_file in \
-      "/cert-updater/export/${domain}/cert.pem" \
-      "/cert-updater/state/${domain}_ecc/${domain}.cer" \
       "/cert-updater/state/${domain}_ecc/fullchain.cer" \
+      "/cert-updater/state/${domain}_ecc/${domain}.cer" \
+      "/cert-updater/state/${domain}/fullchain.cer" \
       "/cert-updater/state/${domain}/${domain}.cer" \
-      "/cert-updater/state/${domain}/fullchain.cer"; do
+      "/cert-updater/export/${domain}/cert.pem"; do
       expires_on=$(certificate_expiry "$cert_file" || true)
       if [ -n "$expires_on" ]; then
         break
@@ -186,6 +188,27 @@ else
       status="valid"
     fi
   
+    local_status=$status
+    local_expires_on=$expires_on
+    host_url=$(HOST_NAME=$host_name yq e '.hosts[strenv(HOST_NAME)].url // ""' "$CONFIG")
+    host_reload=$(HOST_NAME=$host_name yq e '.hosts[strenv(HOST_NAME)].reload // ""' "$CONFIG")
+    host_dest=$(yq e "$domain_path.dest // \"\"" "$CONFIG")
+    desired_cert=$(managed_certificate "$domain" || true)
+    deployment=$(inspect_deployment "$domain" "$host_name" "$host_url" "$host_dest" "$host_reload" "$desired_cert")
+    status=$(printf '%s' "$deployment" | yq e '.remote_status' -)
+    expires_on=$(printf '%s' "$deployment" | yq e '.remote_expires_on' -)
+    deployment_status=$(printf '%s' "$deployment" | yq e '.deployment_status' -)
+    if [ "$deployment_status" != current ]; then
+      if [ -n "$desired_cert" ]; then
+        touch "/cert-updater/state/.${domain}.deploy-pending"
+      fi
+      # Deployment recovery must not wait for the local certificate's renewal.
+      retry_check=$((NOW_EPOCH + ${FALLBACK_SYNC_INTERVAL_SECONDS:-${SYNC_INTERVAL_SECONDS:-86400}}))
+      if [ -z "$next_check" ] || [ "$next_check" -gt "$retry_check" ]; then
+        next_update=$(date -u -d "@$retry_check" +"%Y-%m-%dT%H:%M:%SZ")
+      fi
+    fi
+
     # Build domain JSON entry
     deploy_pending=false
     if [ -f "/cert-updater/state/.${domain}.deploy-pending" ]; then
@@ -199,6 +222,9 @@ else
       "last_checked": $(json_string "$NOW"),
       "last_updated": $(json_string "$last_updated"),
       "expires_on": $(json_string "$expires_on"),
+      "local_expires_on": $(json_string "$local_expires_on"),
+      "local_status": $(json_string "$local_status"),
+      "deployment": $deployment,
       "next_update": $(json_string "$next_update"),
       "deploy_pending": $deploy_pending,
       "status": $(json_string "$status")
@@ -217,8 +243,10 @@ ${domain_entry}"
   done
 fi
 
-# Write final status.json
-cat > "$STATUS_FILE" <<EOF
+# Publish complete snapshots so readers never see partially written JSON.
+status_tmp=$(mktemp "${STATUS_FILE}.XXXXXX") || exit 1
+trap 'rm -f "$status_tmp"' EXIT HUP INT TERM
+cat > "$status_tmp" <<EOF
 {
   "last_sync": "$NOW",
   "hosts": [
@@ -229,5 +257,6 @@ ${domains_json}
   ]
 }
 EOF
+mv "$status_tmp" "$STATUS_FILE"
 
 echo "Status updated: $STATUS_FILE"

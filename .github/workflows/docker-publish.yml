@@ -9,8 +9,61 @@ on:
 env:
   REGISTRY: ghcr.io
 
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  version:
+    if: github.ref_type == 'branch'
+    runs-on: [self-hosted, linux, x64]
+
+    permissions:
+      contents: write
+
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      commit: ${{ steps.bump.outputs.commit }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Bump patch version
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Retry if another commit reaches the branch while the bump is made.
+          for attempt in 1 2 3; do
+            git fetch origin "$GITHUB_REF_NAME"
+            git checkout -B version-bump FETCH_HEAD
+            version=$(cat VERSION)
+            if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "VERSION must contain MAJOR.MINOR.PATCH, got '$version'" >&2
+              exit 1
+            fi
+            version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((10#${BASH_REMATCH[3]} + 1))"
+            printf '%s\n' "$version" > VERSION
+            git add -- VERSION
+            git commit -m "chore: bump version to $version"
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+              printf 'commit=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Version push failed (attempt $attempt/3); refreshing branch" >&2
+          done
+          echo "Could not persist the version bump" >&2
+          exit 1
+
   build-cert-updater:
+    needs: version
     runs-on: [self-hosted, linux, x64]
 
     permissions:
@@ -20,6 +73,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.commit }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -43,6 +98,9 @@ jobs:
             type=ref,event=branch
             type=sha
             type=raw,value=latest
+            type=raw,value=${{ needs.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -54,6 +112,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   build-cert-updater-web:
+    needs: version
     runs-on: [self-hosted, linux, x64]
 
     permissions:
@@ -63,6 +122,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.commit }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,6 +144,9 @@ jobs:
             type=ref,event=branch
             type=sha
             type=raw,value=latest
+            type=raw,value=${{ needs.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6

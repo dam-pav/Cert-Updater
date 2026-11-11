@@ -58,8 +58,9 @@ http://localhost:8080
 
 The dashboard includes:
 
-- **Domains view**: Domain name, target host, DNS provider, local certificate validity, deployment readiness, last issuance time, expiry, and next check time
+- **Domains view**: Domain name, target host, DNS provider, remote certificate validity, verified deployment status, last successful deployment, remote expiry, and next check time
 - **Tab attention indicators**: A red `(!)` appears beside **Hosts** for host problems and beside **Domains** for certificate or deployment problems. Details remain in the relevant table. Valid local certificates do not imply successful deployment. Pending failures remain visible until a retry succeeds.
+- **Remote verification**: Each sync reads `cert.pem` from every configured remote destination and compares it with the latest issued certificate, including its chain. A deployment is confirmed only after file transfer, successful reload, and a matching readback. The timestamp, certificate fingerprint, and target configuration are saved under `state/.<domain>.deployment.json` and survive restarts. Remote changes or unreadable files remove the current confirmation; the last successful deployment time remains available for the same target configuration. This verifies the installed file and successful reload command, not the certificate served by a public TLS endpoint.
 - **Hosts view**: Host name, SSH URL, diagnostic status, transfer method, assigned domain count, and reload command
 - **Host diagnostics**: Shows `Ready` when SSH works and the configured destination accepts a write test, `MissingKey` when SSH authentication fails because the public key is not installed, `Unreachable` when the host cannot be contacted, and red fallback statuses such as `NoDest` or `Error` for other deployment-readiness problems
 - **Settings editor**: Admin users can edit `settings.yml` in the browser with validation before saving
@@ -415,16 +416,18 @@ docker exec cert-updater ssh -i /cert-updater/home/.ssh/id_ed25519 \
   -o IdentitiesOnly=yes -o BatchMode=yes user@target-host "echo success"
 ```
 
-After correcting SSH access, run a manual sync to retry a pending deployment.
+After correcting SSH access, run a manual sync to retry deployment.
 Failed deployments are recorded in the state directory and retried even when
-the certificate is not due for renewal. For a deployment that failed before
-this retry tracking was installed, first mark the existing certificate pending
-(replace `example.com` with the affected domain):
+the certificate is not due for renewal. Each sync verifies the remote file, so
+older deployments without a recorded confirmation are repaired automatically:
 
 ```bash
-docker exec cert-updater touch /cert-updater/state/.example.com.deploy-pending
 docker exec cert-updater /cert-updater/bin/sync-certs.sh
 ```
+
+Pending deployments are checked again within the fallback sync interval instead
+of waiting until the local certificate approaches renewal. The remote login
+must be able to read the configured destination's `cert.pem` for verification.
 
 ### sftp-server Not Found
 
@@ -450,6 +453,19 @@ docker logs cert-updater
 - Missing `settings.yml`
 - Invalid YAML syntax
 - Missing required fields
+
+## Versioning
+
+The app version is maintained in the root `VERSION` file, starting at `0.1.0`.
+Use `MAJOR.MINOR.PATCH`: increment the major version for incompatible changes
+and minor for new features. The Docker publish workflow automatically increments
+the patch (third) segment and commits `VERSION` back to the triggering branch
+before building. For example, `0.1.0` becomes `0.1.1`. Both images build from
+that same commit, carry the version as an image tag and OCI label, and retain
+the existing `latest`, branch, and SHA tags. The workflow needs permission to
+push its version commit to the branch. Local builds use `VERSION` unchanged.
+The web UI displays the version bundled with its running image at the bottom
+center of the login page and dashboard.
 
 ## License
 

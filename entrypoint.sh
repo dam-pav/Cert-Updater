@@ -62,6 +62,9 @@ refresh_sync_interval() {
       next_check=$((now + fallback_interval))
       log "No certificate expiry found for $domain; using fallback check interval"
     fi
+    if [ -f "/cert-updater/state/.${domain}.deploy-pending" ] && [ "$next_check" -gt "$((now + fallback_interval))" ]; then
+      next_check=$((now + fallback_interval))
+    fi
     if [ -z "$earliest_check" ] || [ "$next_check" -lt "$earliest_check" ]; then
       earliest_check=$next_check
     fi

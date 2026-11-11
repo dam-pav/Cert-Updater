@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+. /cert-updater/bin/renewal-schedule.sh
+. /cert-updater/bin/deployment-state.sh
+
 CONFIG=/cert-updater/config/settings.yml
 ACME_HOME=/cert-updater/state
 
@@ -138,12 +141,15 @@ while [ "$i" -lt "$domain_count" ]; do
     fi
     # acme.sh returns 0=success, 2=skip (not due), other=error
     if [ "$issue_result" -eq 2 ]; then
-      if [ -f "$deploy_pending" ]; then
-        echo "  -> certificate not due for renewal, retrying pending deploy"
-      else
-        echo "  -> certificate not due for renewal, skipping deploy"
+      desired_cert=$(managed_certificate "$domain" || true)
+      remote_check=$(inspect_deployment "$domain" "$host_name" "$host_url" "$host_dest" "$host_reload" "$desired_cert")
+      remote_state=$(printf '%s' "$remote_check" | yq e '.deployment_status' -)
+      if [ "$remote_state" = current ]; then
+        echo "  -> certificate not due for renewal, remote deployment verified current"
         i=$((i + 1))
         continue
+      else
+        echo "  -> certificate not due for renewal, repairing deployment ($remote_state)"
       fi
     elif [ "$issue_result" -ne 0 ]; then
       echo "  -> WARNING: certificate issuance failed for $domain (exit $issue_result), will retry on next run"

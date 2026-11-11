@@ -101,10 +101,10 @@
                             <th>Domain</th>
                             <th>Host</th>
                             <th class="hide-mobile">Provider</th>
-                            <th title="Validity of the local certificate">Certificate</th>
+                            <th title="Certificate read from the configured destination over SSH">Remote Certificate</th>
                             <th>Deployment</th>
-                            <th title="Local certificate issuance or renewal time">Last Issued</th>
-                            <th>Expires On</th>
+                            <th title="Last verified certificate delivery and successful reload">Last Deployed</th>
+                            <th>Remote Expires On</th>
                             <th title="Next scheduled check; acme.sh decides whether renewal is due">Next Check</th>
                         </tr>
                     </thead>
@@ -267,6 +267,8 @@
         </div>
     </div>
 
+    <footer class="app-version" id="appVersion">Certificate Updater</footer>
+
     <script>
         let CURRENT_USER = null;
         let STATUS_REFRESH_TIMER = null;
@@ -277,6 +279,21 @@
         const AUTH_STORAGE_KEY = 'cert-updater-basic-auth';
         const THEME_COOKIE_KEY = 'cert-updater-theme';
         const THEMES = new Set(['default', 'dark']);
+
+        async function loadAppVersion() {
+            const footer = document.getElementById('appVersion');
+            try {
+                const response = await fetch(appUrl('VERSION'), { cache: 'no-store' });
+                if (!response.ok) throw new Error('Version unavailable');
+                const version = (await response.text()).trim();
+                if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+                    throw new Error('Invalid version');
+                }
+                footer.textContent = `Certificate Updater v${version}`;
+            } catch {
+                footer.textContent = 'Certificate Updater · version unavailable';
+            }
+        }
 
         function escapeHtml(str) {
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -320,11 +337,20 @@
         function deploymentHealth(domain, hosts) {
             const host = hosts.find(host => host.name === domain.host);
             const health = hostHealth(host);
-            if (health[0] === 'expired') return health;
+            if (health[0] !== 'valid') return health;
+            const states = {
+                current: ['valid', 'Deployed', 'The remote certificate matches the latest issued certificate and deployment completed with a successful reload.'],
+                outdated: ['expired', 'Remote out of date', 'The certificate on the remote host differs from the latest issued certificate. Deployment will be retried.'],
+                missing: ['expired', 'Remote certificate missing', 'The certificate file was not found at the configured remote destination.'],
+                pending: ['expired', 'Deployment pending', 'Certificate delivery and reload have not completed successfully. Deployment will be retried.'],
+                error: ['unknown', 'Remote check failed', 'The remote certificate could not be read or parsed.'],
+                unverified: ['unknown', 'Deployment unverified', 'Successful deployment and reload of the current certificate have not been recorded.']
+            };
             if (domain.deploy_pending) {
-                return ['expired', 'Deployment pending', 'The previous deployment failed or was interrupted and needs a successful retry.'];
+                return states[domain.deployment_status] && domain.deployment_status !== 'current'
+                    ? states[domain.deployment_status] : states.pending;
             }
-            return health;
+            return states[domain.deployment_status] || states.unverified;
         }
 
         function renderTabAttention(domains, hosts, statusAvailable, hostsAvailable = true) {
@@ -357,7 +383,7 @@
                     <td class="hide-mobile"><span class="provider-badge">${escapeHtml(d.provider || '—')}</span></td>
                     <td><span class="status-badge ${['valid', 'expired', 'unknown'].includes(d.status) ? d.status : 'unknown'}"><span class="status-dot"></span>${escapeHtml(d.status || 'unknown')}</span></td>
                     <td><span class="status-badge host-status ${deploymentHealth(d, hosts)[0]}" title="${escapeHtml(deploymentHealth(d, hosts)[2])}"><span class="status-dot"></span>${escapeHtml(deploymentHealth(d, hosts)[1])}</span></td>
-                    <td class="datetime">${formatDateTime(d.last_updated)}</td>
+                    <td class="datetime">${formatDateTime(d.last_deployed)}</td>
                     <td class="datetime">${formatDateTime(d.expires_on)}</td>
                     <td class="datetime">${formatDateTime(d.next_update)}</td>
                 </tr>
@@ -856,10 +882,12 @@
                 const status = statusByName.get(domain.name) || {};
                 return {
                     ...domain,
-                    status: status.status || 'unknown',
+                    status: status.deployment?.remote_status || 'unknown',
+                    deployment_status: status.deployment?.deployment_status || 'unverified',
+                    last_deployed: status.deployment?.last_deployed || '',
                     deploy_pending: status.deploy_pending === true,
                     last_updated: status.last_updated || '',
-                    expires_on: status.expires_on || '',
+                    expires_on: status.deployment?.remote_expires_on || '',
                     next_update: status.next_update || ''
                 };
             });
@@ -996,6 +1024,7 @@
         });
 
         updateStaticAssetUrls();
+        loadAppVersion();
         initializeDashboard();
     </script>
 
