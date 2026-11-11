@@ -143,7 +143,7 @@ else
     expires_on=""
     expiry_epoch=""
 
-    # Prefer the deployed certificate, then fall back to acme.sh's state. The
+    # Prefer the locally exported certificate, then fall back to acme.sh's state. The
     # latter ensures a skipped (not-yet-due) renewal still refreshes expiry.
     for cert_file in \
       "/cert-updater/export/${domain}/cert.pem" \
@@ -187,6 +187,10 @@ else
     fi
   
     # Build domain JSON entry
+    deploy_pending=false
+    if [ -f "/cert-updater/state/.${domain}.deploy-pending" ]; then
+      deploy_pending=true
+    fi
     domain_entry=$(cat <<ENTRY
     {
       "name": $(json_string "$domain"),
@@ -196,6 +200,7 @@ else
       "last_updated": $(json_string "$last_updated"),
       "expires_on": $(json_string "$expires_on"),
       "next_update": $(json_string "$next_update"),
+      "deploy_pending": $deploy_pending,
       "status": $(json_string "$status")
     }
 ENTRY

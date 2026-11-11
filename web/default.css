@@ -356,6 +356,11 @@
             text-transform: none;
         }
 
+        .tab-attention {
+            color: var(--status-expired);
+            font-weight: 700;
+        }
+
         .datetime {
             color: var(--text-secondary);
             font-size: 0.85rem;

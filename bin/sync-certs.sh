@@ -92,6 +92,7 @@ while [ "$i" -lt "$domain_count" ]; do
 
   cert_dir="${ACME_HOME}/${domain}_ecc"
   export_dir="/cert-updater/export/${domain}"
+  deploy_pending="${ACME_HOME}/.${domain}.deploy-pending"
 
   env_keys=$(yq e "$domain_path | (.dns // {}) | .env // {} | keys | .[]" "$CONFIG")
   if [ -n "$dns_provider" ]; then
@@ -137,9 +138,13 @@ while [ "$i" -lt "$domain_count" ]; do
     fi
     # acme.sh returns 0=success, 2=skip (not due), other=error
     if [ "$issue_result" -eq 2 ]; then
-      echo "  -> certificate not due for renewal, skipping deploy"
-      i=$((i + 1))
-      continue
+      if [ -f "$deploy_pending" ]; then
+        echo "  -> certificate not due for renewal, retrying pending deploy"
+      else
+        echo "  -> certificate not due for renewal, skipping deploy"
+        i=$((i + 1))
+        continue
+      fi
     elif [ "$issue_result" -ne 0 ]; then
       echo "  -> WARNING: certificate issuance failed for $domain (exit $issue_result), will retry on next run"
       i=$((i + 1))
@@ -154,6 +159,9 @@ while [ "$i" -lt "$domain_count" ]; do
   echo "  -> installing deploy hook"
 
   mkdir -p "/cert-updater/export/${domain}"
+  # Persist before invoking the hook so failures and interrupted deployments
+  # are retried even when acme.sh skips renewal on the following run.
+  touch "$deploy_pending"
 
   if ! acme.sh --install-cert -d "$domain" \
     --ecc \
@@ -167,6 +175,8 @@ while [ "$i" -lt "$domain_count" ]; do
                       \"$host_reload\" \
                       $host_transfer"; then
     echo "  -> WARNING: deploy failed for $domain, will retry on next run"
+  else
+    rm -f "$deploy_pending"
   fi
 
   i=$((i + 1))

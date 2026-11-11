@@ -58,7 +58,8 @@ http://localhost:8080
 
 The dashboard includes:
 
-- **Domains view**: Domain name, target host, DNS provider, certificate status, last checked time, last update time, and next update time
+- **Domains view**: Domain name, target host, DNS provider, local certificate validity, deployment readiness, last issuance time, expiry, and next check time
+- **Tab attention indicators**: A red `(!)` appears beside **Hosts** for host problems and beside **Domains** for certificate or deployment problems. Details remain in the relevant table. Valid local certificates do not imply successful deployment. Pending failures remain visible until a retry succeeds.
 - **Hosts view**: Host name, SSH URL, diagnostic status, transfer method, assigned domain count, and reload command
 - **Host diagnostics**: Shows `Ready` when SSH works and the configured destination accepts a write test, `MissingKey` when SSH authentication fails because the public key is not installed, `Unreachable` when the host cannot be contacted, and red fallback statuses such as `NoDest` or `Error` for other deployment-readiness problems
 - **Settings editor**: Admin users can edit `settings.yml` in the browser with validation before saving
@@ -406,6 +407,24 @@ docker exec cert-updater /cert-updater/bin/sync-certs.sh
 - Ensure the public key is in the correct file on the target host
 - Check file permissions: `authorized_keys` must be `600`
 - Verify the user matches the relevant `hosts.<name>.url` value in `settings.yml`
+
+Test from inside the worker to use the same mounted key as deployment:
+
+```bash
+docker exec cert-updater ssh -i /cert-updater/home/.ssh/id_ed25519 \
+  -o IdentitiesOnly=yes -o BatchMode=yes user@target-host "echo success"
+```
+
+After correcting SSH access, run a manual sync to retry a pending deployment.
+Failed deployments are recorded in the state directory and retried even when
+the certificate is not due for renewal. For a deployment that failed before
+this retry tracking was installed, first mark the existing certificate pending
+(replace `example.com` with the affected domain):
+
+```bash
+docker exec cert-updater touch /cert-updater/state/.example.com.deploy-pending
+docker exec cert-updater /cert-updater/bin/sync-certs.sh
+```
 
 ### sftp-server Not Found
 

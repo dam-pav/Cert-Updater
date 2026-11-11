@@ -89,8 +89,8 @@
         </div>
 
         <div class="subpage-tabs" role="tablist" aria-label="Dashboard views">
-            <button class="subpage-tab active" id="domainsTab" role="tab" aria-selected="true" aria-controls="domainsPage" onclick="switchSubpage('domains')">Domains</button>
-            <button class="subpage-tab" id="hostsTab" role="tab" aria-selected="false" aria-controls="hostsPage" onclick="switchSubpage('hosts')">Hosts</button>
+            <button class="subpage-tab active" id="domainsTab" role="tab" aria-selected="true" aria-controls="domainsPage" onclick="switchSubpage('domains')">Domains<span id="domainsAttention" class="tab-attention" role="img" aria-label="Requires attention" title="Certificate or deployment issues require attention" hidden> (!)</span></button>
+            <button class="subpage-tab" id="hostsTab" role="tab" aria-selected="false" aria-controls="hostsPage" onclick="switchSubpage('hosts')">Hosts<span id="hostsAttention" class="tab-attention" role="img" aria-label="Requires attention" title="Host issues require attention" hidden> (!)</span></button>
         </div>
 
         <div class="subpage active" id="domainsPage" role="tabpanel" aria-labelledby="domainsTab">
@@ -101,15 +101,16 @@
                             <th>Domain</th>
                             <th>Host</th>
                             <th class="hide-mobile">Provider</th>
-                            <th>Status</th>
-                            <th>Last Updated</th>
+                            <th title="Validity of the local certificate">Certificate</th>
+                            <th>Deployment</th>
+                            <th title="Local certificate issuance or renewal time">Last Issued</th>
                             <th>Expires On</th>
                             <th title="Next scheduled check; acme.sh decides whether renewal is due">Next Check</th>
                         </tr>
                     </thead>
                     <tbody id="domainTable">
                         <tr>
-                            <td colspan="7">
+                            <td colspan="8">
                                 <div class="loading">
                                     <div class="spinner"></div>
                                     Loading certificate status...
@@ -305,12 +306,40 @@
             document.getElementById('hostsTab').setAttribute('aria-selected', String(isHosts));
         }
 
-        function renderTable(domains) {
+        function hostHealth(host) {
+            const states = {
+                MissingKey: ['expired', 'SSH authentication failed', 'The target rejected SSH authentication. Check the public key, login user, and key permissions.'],
+                Unreachable: ['expired', 'Host unreachable', 'The deployment target could not be contacted over SSH.'],
+                NoDest: ['expired', 'Destination missing', 'No certificate destination is configured for this host.'],
+                Error: ['expired', 'Host check failed', 'The deployment destination could not be verified. Check access and write permissions.'],
+                Ready: ['valid', 'Host ready', 'SSH and a destination write test succeeded. This does not confirm certificate deployment.']
+            };
+            return states[host?.operational] || ['unknown', 'Host status unknown', 'Deployment readiness has not been verified.'];
+        }
+
+        function deploymentHealth(domain, hosts) {
+            const host = hosts.find(host => host.name === domain.host);
+            const health = hostHealth(host);
+            if (health[0] === 'expired') return health;
+            if (domain.deploy_pending) {
+                return ['expired', 'Deployment pending', 'The previous deployment failed or was interrupted and needs a successful retry.'];
+            }
+            return health;
+        }
+
+        function renderTabAttention(domains, hosts, statusAvailable, hostsAvailable = true) {
+            document.getElementById('hostsAttention').hidden = hostsAvailable &&
+                hosts.every(host => hostHealth(host)[0] === 'valid');
+            document.getElementById('domainsAttention').hidden = statusAvailable &&
+                domains.every(domain => domain.status === 'valid' && deploymentHealth(domain, hosts)[0] === 'valid');
+        }
+
+        function renderTable(domains, hosts = []) {
             const tbody = document.getElementById('domainTable');
 
             if (!domains.length) {
                 tbody.innerHTML = `
-                    <tr><td colspan="7">
+                    <tr><td colspan="8">
                         <div class="empty-state">
                             <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                                 <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 5.25h9a2.25 2.25 0 0 0 2.25-2.25V8.25a2.25 2.25 0 0 0-2.25-2.25h-9a2.25 2.25 0 0 0-2.25 2.25v5.25a2.25 2.25 0 0 0 2.25 2.25Z"/>
@@ -327,6 +356,7 @@
                     <td><span class="host-tag">${escapeHtml(d.host || '—')}</span></td>
                     <td class="hide-mobile"><span class="provider-badge">${escapeHtml(d.provider || '—')}</span></td>
                     <td><span class="status-badge ${['valid', 'expired', 'unknown'].includes(d.status) ? d.status : 'unknown'}"><span class="status-dot"></span>${escapeHtml(d.status || 'unknown')}</span></td>
+                    <td><span class="status-badge host-status ${deploymentHealth(d, hosts)[0]}" title="${escapeHtml(deploymentHealth(d, hosts)[2])}"><span class="status-dot"></span>${escapeHtml(deploymentHealth(d, hosts)[1])}</span></td>
                     <td class="datetime">${formatDateTime(d.last_updated)}</td>
                     <td class="datetime">${formatDateTime(d.expires_on)}</td>
                     <td class="datetime">${formatDateTime(d.next_update)}</td>
@@ -355,7 +385,7 @@
                 <tr>
                     <td><span class="host-tag">${escapeHtml(h.name || '—')}</span></td>
                     <td class="command-text">${escapeHtml(h.url || '—')}</td>
-                    <td><span class="status-badge host-status ${(h.operational || '') === 'Ready' ? 'valid' : 'expired'}"><span class="status-dot"></span>${escapeHtml(h.operational || 'Error')}</span></td>
+                    <td><span class="status-badge host-status ${hostHealth(h)[0]}" title="${escapeHtml(hostHealth(h)[2])}"><span class="status-dot"></span>${escapeHtml(hostHealth(h)[1])}</span></td>
                     <td><span class="transfer-badge">${escapeHtml(h.transfer || 'scp')}</span></td>
                     <td>${Number.isFinite(Number(h.domain_count)) ? Number(h.domain_count) : 0}</td>
                     <td class="command-text hide-mobile">${escapeHtml(h.reload || '—')}</td>
@@ -827,6 +857,7 @@
                 return {
                     ...domain,
                     status: status.status || 'unknown',
+                    deploy_pending: status.deploy_pending === true,
                     last_updated: status.last_updated || '',
                     expires_on: status.expires_on || '',
                     next_update: status.next_update || ''
@@ -861,17 +892,20 @@
                     syncEl.innerHTML = `<span class="dot"></span><span>Status unavailable</span>`;
                 }
 
-                renderTable(mergeDomainStatus(config.domains || [], status?.domains || []));
+                const domains = mergeDomainStatus(config.domains || [], status?.domains || []);
                 HOSTS = config.hosts || [];
                 SSH_HOSTS = config.hosts || [];
+                renderTable(domains, HOSTS);
+                renderTabAttention(domains, HOSTS, Boolean(status));
                 renderHostsTable(HOSTS);
                 if (document.getElementById('sshModal').classList.contains('active')) {
                     renderSshHostOptions();
                     renderSshCommands();
                 }
             } catch (err) {
+                renderTabAttention([], [], false, false);
                 document.getElementById('domainTable').innerHTML = `
-                    <tr><td colspan="7"><div class="error-msg">Failed to load status: ${escapeHtml(err.message)}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
+                    <tr><td colspan="8"><div class="error-msg">Failed to load status: ${escapeHtml(err.message)}<br><small>Ensure status.json is accessible at the same path as this page.</small></div></td></tr>`;
                 document.getElementById('hostTable').innerHTML = `
                     <tr><td colspan="6"><div class="error-msg">Failed to load hosts: ${escapeHtml(err.message)}</div></td></tr>`;
             }
