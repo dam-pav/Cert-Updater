@@ -7,6 +7,22 @@
     <link id="settingsSchemaAsset" rel="schema" href="settings.schema.json" type="application/json">
     <link id="themeStylesheet" rel="stylesheet" href="default.css">
     <title>Certificate Updater Status</title>
+    <style>
+        body { padding-bottom: 3rem; }
+        .app-version {
+            position: fixed;
+            bottom: 0.75rem;
+            left: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            font-size: 11px;
+            line-height: 1.4;
+            color: var(--text-secondary, #64748b);
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
     <div class="login-shell" id="loginShell">
@@ -89,8 +105,20 @@
         </div>
 
         <div class="subpage-tabs" role="tablist" aria-label="Dashboard views">
-            <button class="subpage-tab active" id="domainsTab" role="tab" aria-selected="true" aria-controls="domainsPage" onclick="switchSubpage('domains')">Domains<span id="domainsAttention" class="tab-attention" role="img" aria-label="Requires attention" title="Certificate or deployment issues require attention" hidden> (!)</span></button>
-            <button class="subpage-tab" id="hostsTab" role="tab" aria-selected="false" aria-controls="hostsPage" onclick="switchSubpage('hosts')">Hosts<span id="hostsAttention" class="tab-attention" role="img" aria-label="Requires attention" title="Host issues require attention" hidden> (!)</span></button>
+            <button class="subpage-tab active" id="domainsTab" role="tab" aria-selected="true" aria-controls="domainsPage" onclick="switchSubpage('domains')">Domains<span id="domainsAttention" role="img" aria-label="Requires attention" title="Certificate or deployment issues require attention" hidden>
+                <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" focusable="false" style="margin-left: 0.25em; vertical-align: -0.15em;">
+                    <circle cx="10" cy="10" r="9" fill="#ef4444"/>
+                    <rect x="9" y="4.5" width="2" height="7" rx="1" fill="#fff"/>
+                    <circle cx="10" cy="14.5" r="1.1" fill="#fff"/>
+                </svg>
+            </span></button>
+            <button class="subpage-tab" id="hostsTab" role="tab" aria-selected="false" aria-controls="hostsPage" onclick="switchSubpage('hosts')">Hosts<span id="hostsAttention" role="img" aria-label="Requires attention" title="Host issues require attention" hidden>
+                <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" focusable="false" style="margin-left: 0.25em; vertical-align: -0.15em;">
+                    <circle cx="10" cy="10" r="9" fill="#ef4444"/>
+                    <rect x="9" y="4.5" width="2" height="7" rx="1" fill="#fff"/>
+                    <circle cx="10" cy="14.5" r="1.1" fill="#fff"/>
+                </svg>
+            </span></button>
         </div>
 
         <div class="subpage active" id="domainsPage" role="tabpanel" aria-labelledby="domainsTab">
@@ -267,7 +295,7 @@
         </div>
     </div>
 
-    <footer class="app-version" id="appVersion">Certificate Updater</footer>
+    <footer class="app-version" id="appVersion">Version unavailable</footer>
 
     <script>
         let CURRENT_USER = null;
@@ -289,9 +317,9 @@
                 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
                     throw new Error('Invalid version');
                 }
-                footer.textContent = `Certificate Updater v${version}`;
+                footer.textContent = `Version ${version}`;
             } catch {
-                footer.textContent = 'Certificate Updater · version unavailable';
+                footer.textContent = 'Version unavailable';
             }
         }
 

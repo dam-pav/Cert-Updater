@@ -61,14 +61,6 @@
             margin: 0 auto;
         }
 
-        .app-version {
-            margin-top: auto;
-            padding-top: 1.5rem;
-            text-align: center;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-
         header {
             display: flex;
             align-items: center;
@@ -365,11 +357,6 @@
 
         .status-badge.host-status {
             text-transform: none;
-        }
-
-        .tab-attention {
-            color: var(--status-expired);
-            font-weight: 700;
         }
 
         .datetime {
