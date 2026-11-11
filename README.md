@@ -155,12 +155,12 @@ If you later find you need to make your own modifications to the compose file, y
 
 ### Optional
 
-| Variable                  | Description                                                                                        |
-| ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `ACME_ACCOUNT_EMAIL`    | Email for Let's Encrypt notifications (expiry warnings)                                            |
+| Variable                  | Description                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `ACME_ACCOUNT_EMAIL`    | Email for Let's Encrypt notifications (expiry warnings)                                                      |
 | `SYNC_INTERVAL_SECONDS` | Delay between checks inside the renewal margin or when certificate expiry is unavailable (default:`86400`) |
-| `WEB_PORT`              | Port for the web dashboard (default:`8080`)                                                      |
-| `TZ`                    | Timezone (default:`UTC`). Preferably use your own timezone.                                      |
+| `WEB_PORT`              | Port for the web dashboard (default:`8080`)                                                                |
+| `TZ`                    | Timezone (default:`UTC`). Preferably use your own timezone.                                                |
 
 ### Example `.env`
 
@@ -268,7 +268,7 @@ domains:
     dns:
       provider: duckdns
       env:
-        DuckDNS_Token: ${DUCKDNS_TOKEN}        
+        DuckDNS_Token: ${DUCKDNS_TOKEN}      
 ```
 
 ### DNS Providers

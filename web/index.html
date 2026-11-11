@@ -304,6 +304,7 @@
         let HOSTS = [];
         let SSH_HOSTS = [];
         let SSH_PUBLIC_KEY = '';
+        let SSH_HOST_PRIVATE_KEY_PATH = '';
         const AUTH_STORAGE_KEY = 'cert-updater-basic-auth';
         const THEME_COOKIE_KEY = 'cert-updater-theme';
         const THEMES = new Set(['default', 'dark']);
@@ -807,8 +808,10 @@
                 '# OpenWrt / ASUS-WRT Merlin with Dropbear root login only',
                 `printf '%s\\n' ${shellQuote(key)} | ssh ${shellQuote(target)} "mkdir -p /etc/dropbear && cat >> /etc/dropbear/authorized_keys && chmod 600 /etc/dropbear/authorized_keys"`,
                 '',
-                '# Test from the Docker host using the updater private key (replace the path)',
-                `ssh -i /path/to/cert-updater/ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes ${shellQuote(target)} "echo success"`
+                '# Test from the Docker host using the updater private key',
+                SSH_HOST_PRIVATE_KEY_PATH
+                    ? `ssh -i ${shellQuote(SSH_HOST_PRIVATE_KEY_PATH)} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new ${shellQuote(target)} "echo success"`
+                    : '# Host key path unavailable: set HOST_SSH_PRIVATE_KEY_PATH on the cert-updater service to enable the test command.'
             ].join('\n');
         }
 
@@ -824,6 +827,7 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
                 SSH_PUBLIC_KEY = data.public_key || '';
+                SSH_HOST_PRIVATE_KEY_PATH = data.host_private_key_path || '';
                 keyEl.value = SSH_PUBLIC_KEY;
                 renderSshHostOptions();
                 renderSshCommands();
@@ -831,6 +835,7 @@
             } catch (err) {
                 keyEl.value = '';
                 SSH_PUBLIC_KEY = '';
+                SSH_HOST_PRIVATE_KEY_PATH = '';
                 renderSshCommands();
                 setSshStatus(`Load failed: ${err.message}`, 'error');
             } finally {

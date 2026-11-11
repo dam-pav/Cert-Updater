@@ -27,6 +27,32 @@ test('all inline dashboard scripts parse', () => {
     }
 });
 
+test('SSH setup uses the host private-key path and quotes it for the shell', () => {
+    const elements = {
+        sshHostSelect: { value: 'homologue@192.168.1.1' },
+        sshCommand: { value: '' }
+    };
+    const context = vm.createContext({
+        document: { getElementById: id => elements[id] },
+        SSH_PUBLIC_KEY: 'ssh-ed25519 example acme-worker',
+        SSH_HOST_PRIVATE_KEY_PATH: "/srv/Damjan's data/cert-updater/ssh/id_ed25519"
+    });
+    for (const name of ['shellQuote', 'renderSshCommands']) {
+        vm.runInContext(html.match(new RegExp(`        function ${name}\\([^]*?\\n        }`))[0], context);
+    }
+    context.renderSshCommands();
+    const command = elements.sshCommand.value.split('\n').at(-1);
+    assert.ok(command.includes("-i '/srv/Damjan'\\''s data/cert-updater/ssh/id_ed25519'"));
+    assert.match(command, /-o StrictHostKeyChecking=accept-new/);
+    assert.ok(command.endsWith("'homologue@192.168.1.1' \"echo success\""));
+    assert.doesNotMatch(command, /\/path\/to/);
+
+    context.SSH_HOST_PRIVATE_KEY_PATH = '';
+    context.renderSshCommands();
+    assert.match(elements.sshCommand.value, /Host key path unavailable/);
+    assert.doesNotMatch(elements.sshCommand.value, /ssh -i/);
+});
+
 test('a valid local certificate exposes SSH rejection on the default page', () => {
     const { context, elements } = dashboard();
     const hosts = [{ name: 'router', operational: 'MissingKey' }];

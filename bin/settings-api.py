@@ -539,7 +539,10 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
             try:
                 with open(SSH_PUBLIC_KEY_PATH, "r") as f:
                     public_key = f.read().strip()
-                self._send_json(200, {"public_key": public_key})
+                self._send_json(200, {
+                    "public_key": public_key,
+                    "host_private_key_path": os.environ.get("HOST_SSH_PRIVATE_KEY_PATH", ""),
+                })
             except FileNotFoundError:
                 self._send_json(404, {"error": "SSH public key not found"})
             except Exception as e:
