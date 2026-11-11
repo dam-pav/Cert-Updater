@@ -268,7 +268,7 @@ domains:
     dns:
       provider: duckdns
       env:
-        DuckDNS_Token: ${DUCKDNS_TOKEN}      
+        DuckDNS_Token: ${DUCKDNS_TOKEN}
 ```
 
 ### DNS Providers
@@ -304,7 +304,13 @@ The commands in this section are run from your Docker host (or from any admin ma
 
 ### 1. Get the Public Key
 
-After signing in to the dashboard, open **SSH Key** to copy the generated public key and host-specific setup commands.
+After signing in to the dashboard as an admin, open **SSH Key**, select a configured host, enter its SSH password and click **Install SSH key**. The backend detects the remote account and firmware, installs the public key without duplicating or removing existing keys, and verifies a fresh login using only the updater's private key. The password is used for that request only; it is not saved or logged.
+
+Automatic installation supports standard home-directory authorized keys, OpenWrt's Dropbear UID 0 key file, and ASUS-WRT / Merlin's root key file with NVRAM persistence. **Advanced** provides an absolute authorized-key path override for custom server configurations. A verification failure reports that the key may already be installed and lets you retry with the correct path. Custom paths on ASUS-WRT do not automatically receive firmware persistence.
+
+The first connection trusts the target's SSH host key, matching the worker's existing policy. A changed host key is rejected. The target must allow password login and remote shell commands for installation.
+
+The public key and manual setup commands remain available in the same dialog. Manual commands run from the Docker host; the generated test command uses its actual key path, passed to the API by Compose as `HOST_SSH_PRIVATE_KEY_PATH`.
 
 You can also view the generated public key on the Docker host:
 
@@ -332,9 +338,9 @@ ssh user@target-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA
 
 #### OpenWrt / ASUS-WRT Merlin (Dropbear)
 
-For a non-root login such as `homologue`, use the standard `~/.ssh/authorized_keys` command above. The `/etc/dropbear/authorized_keys` file below is for root login only.
+For accounts whose UID is not 0, use the standard `~/.ssh/authorized_keys` command above. A login named `homologue` may still have UID 0; check with `ssh homologue@router 'id -u'`. The `/etc/dropbear/authorized_keys` file below is specific to OpenWrt's Dropbear UID 0 login.
 
-For the root user (UID 0):
+For OpenWrt's root user (UID 0):
 
 ```bash
 ssh root@router "cat >> /etc/dropbear/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
@@ -347,6 +353,8 @@ For non-root users:
 ssh user@router "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys" < ${DATA_DIR}/cert-updater/ssh/id_ed25519.pub
 ssh user@router "chmod 600 ~/.ssh/authorized_keys"
 ```
+
+ASUS-WRT / Merlin uses `/root/.ssh/authorized_keys` for its UID 0 account and recreates that file from the router's authorized-key settings when SSH restarts. Use automatic installation or the router's authorized-key settings to persist the key.
 
 > **Important**: Dropbear rejects keys from world-writable files. Ensure permissions are `600`.
 

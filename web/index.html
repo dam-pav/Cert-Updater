@@ -280,13 +280,35 @@
                         <textarea class="copy-block" id="sshPublicKey" readonly placeholder="Loading SSH public key..."></textarea>
                     </div>
                     <div class="ssh-field">
-                        <label for="sshHostSelect">Target host command</label>
-                        <select id="sshHostSelect" onchange="renderSshCommands()"></select>
-                        <textarea class="copy-block" id="sshCommand" readonly></textarea>
+                        <label for="sshHostSelect">Target host</label>
+                        <select id="sshHostSelect" onchange="changeSshHost()"></select>
                     </div>
-                    <p class="ssh-note">
-                        Run the install command from your Docker host or another machine that can SSH to the target. Choose the command for the configured login user: the Dropbear /etc/dropbear/authorized_keys command is for root only. For a non-root user, install the key in that user's ~/.ssh/authorized_keys, including on Dropbear routers. Test with the updater's matching private key and BatchMode so SSH cannot silently fall back to a password.
-                    </p>
+                    <form id="sshInstallForm" class="ssh-grid" onsubmit="installSshKey(event)" hidden>
+                        <div class="ssh-field">
+                            <label for="sshPassword">Target SSH password</label>
+                            <input id="sshPassword" type="password" autocomplete="off" required>
+                        </div>
+                        <details>
+                            <summary>Advanced: authorized-key path override</summary>
+                            <div class="ssh-field">
+                                <label for="sshKeyPath">Absolute path on the target (leave empty for automatic detection)</label>
+                                <input id="sshKeyPath" type="text" autocomplete="off" spellcheck="false">
+                            </div>
+                        </details>
+                        <div class="editor-toolbar">
+                            <button id="installSshBtn" class="primary" type="submit">Install SSH key</button>
+                        </div>
+                        <p class="ssh-note">The password is used for this installation only and is not saved. The installer detects the remote setup, preserves existing keys and verifies a fresh key-only login. First connections trust the target's SSH host key; changed host keys are rejected.</p>
+                    </form>
+                    <p class="ssh-note" id="sshInstallResult" role="status" aria-live="polite"></p>
+                    <details>
+                        <summary>Manual setup commands</summary>
+                        <textarea class="copy-block" id="sshCommand" readonly></textarea>
+                        <p class="ssh-note">
+                            Manual commands run from your Docker host or another machine that can SSH to the target. The /etc/dropbear/authorized_keys command is for OpenWrt UID 0 accounts. Other accounts normally use ~/.ssh/authorized_keys. ASUS-WRT recreates its root authorized keys from router settings; use automatic installation to persist them.
+                        </p>
+                    </details>
+                    <p class="ssh-note">Automatic installation requires an admin account in this dashboard.</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -305,6 +327,7 @@
         let SSH_HOSTS = [];
         let SSH_PUBLIC_KEY = '';
         let SSH_HOST_PRIVATE_KEY_PATH = '';
+        let SSH_INSTALLING = false;
         const AUTH_STORAGE_KEY = 'cert-updater-basic-auth';
         const THEME_COOKIE_KEY = 'cert-updater-theme';
         const THEMES = new Set(['default', 'dark']);
@@ -768,12 +791,13 @@
             const options = sourceHosts.length
                 ? sourceHosts.map(host => ({
                     value: host.url || '',
+                    name: host.name || '',
                     label: `${host.name || host.url || 'target'} (${host.url || 'missing URL'})`
                 }))
-                : [{ value: 'user@target-host', label: 'user@target-host' }];
+                : [{ value: '', name: '', label: 'No configured hosts' }];
 
             select.innerHTML = options.map(option =>
-                `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`
+                `<option value="${escapeHtml(option.value)}" data-host-name="${escapeHtml(option.name)}">${escapeHtml(option.label)}</option>`
             ).join('');
 
             if ([...select.options].some(option => option.value === previous)) {
@@ -793,11 +817,15 @@
 
         function renderSshCommands() {
             const key = SSH_PUBLIC_KEY.trim();
-            const target = document.getElementById('sshHostSelect').value || 'user@target-host';
+            const target = document.getElementById('sshHostSelect').value;
             const commandEl = document.getElementById('sshCommand');
 
             if (!key) {
                 commandEl.value = 'Load the generated public key first.';
+                return;
+            }
+            if (!target) {
+                commandEl.value = 'Configure a target host first.';
                 return;
             }
 
@@ -805,7 +833,7 @@
                 '# Standard Linux / OpenSSH (also use for non-root Dropbear users)',
                 `printf '%s\\n' ${shellQuote(key)} | ssh ${shellQuote(target)} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"`,
                 '',
-                '# OpenWrt / ASUS-WRT Merlin with Dropbear root login only',
+                '# OpenWrt with Dropbear UID 0 login only',
                 `printf '%s\\n' ${shellQuote(key)} | ssh ${shellQuote(target)} "mkdir -p /etc/dropbear && cat >> /etc/dropbear/authorized_keys && chmod 600 /etc/dropbear/authorized_keys"`,
                 '',
                 '# Test from the Docker host using the updater private key',
@@ -813,6 +841,14 @@
                     ? `ssh -i ${shellQuote(SSH_HOST_PRIVATE_KEY_PATH)} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new ${shellQuote(target)} "echo success"`
                     : '# Host key path unavailable: set HOST_SSH_PRIVATE_KEY_PATH on the cert-updater service to enable the test command.'
             ].join('\n');
+        }
+
+        function changeSshHost() {
+            document.getElementById('sshPassword').value = '';
+            document.getElementById('sshKeyPath').value = '';
+            document.getElementById('sshInstallResult').textContent = '';
+            setSshStatus('');
+            renderSshCommands();
         }
 
         async function loadSshPublicKey() {
@@ -846,13 +882,65 @@
         async function openSshSetup() {
             if (!CURRENT_USER) return;
             document.getElementById('sshModal').classList.add('active');
+            if (SSH_INSTALLING) return;
+            document.getElementById('sshInstallForm').hidden = CURRENT_USER.role !== 'admin';
+            document.getElementById('sshPassword').value = '';
+            document.getElementById('sshKeyPath').value = '';
+            document.getElementById('sshInstallResult').textContent = '';
             renderSshHostOptions();
             await loadSshPublicKey();
         }
 
         function closeSshSetup() {
             document.getElementById('sshModal').classList.remove('active');
+            document.getElementById('sshPassword').value = '';
             setSshStatus('');
+        }
+
+        async function installSshKey(event) {
+            event.preventDefault();
+            if (SSH_INSTALLING || !CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+            const select = document.getElementById('sshHostSelect');
+            const host = select.selectedOptions[0]?.dataset.hostName;
+            const passwordEl = document.getElementById('sshPassword');
+            const resultEl = document.getElementById('sshInstallResult');
+            const button = document.getElementById('installSshBtn');
+            if (!host || !passwordEl.value) {
+                resultEl.textContent = 'Select a configured host and enter its SSH password.';
+                return;
+            }
+            const body = JSON.stringify({
+                host,
+                password: passwordEl.value,
+                authorized_keys_path: document.getElementById('sshKeyPath').value.trim()
+            });
+            passwordEl.value = '';
+            SSH_INSTALLING = true;
+            button.disabled = true;
+            select.disabled = true;
+            document.getElementById('reloadSshBtn').disabled = true;
+            resultEl.textContent = 'Connecting, detecting the remote setup and installing the key…';
+            setSshStatus('Installing…');
+            try {
+                const res = await authFetch('api/ssh/install-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                resultEl.textContent = `${data.platform} / ${data.ssh_server}, UID ${data.uid}. ${data.message}${data.persistence === 'nvram' ? ' Saved in router settings for restarts.' : ''}${data.warning ? ' ' + data.warning : ''}`;
+                setSshStatus('Key-only login verified', 'success');
+            } catch (err) {
+                resultEl.textContent = err.message;
+                setSshStatus('Installation failed', 'error');
+            } finally {
+                SSH_INSTALLING = false;
+                button.disabled = false;
+                select.disabled = false;
+                passwordEl.value = '';
+                document.getElementById('reloadSshBtn').disabled = false;
+            }
         }
 
         async function writeClipboard(text, statusMessage) {
@@ -959,7 +1047,7 @@
                 renderTable(domains, HOSTS);
                 renderTabAttention(domains, HOSTS, Boolean(status));
                 renderHostsTable(HOSTS);
-                if (document.getElementById('sshModal').classList.contains('active')) {
+                if (!SSH_INSTALLING && document.getElementById('sshModal').classList.contains('active')) {
                     renderSshHostOptions();
                     renderSshCommands();
                 }

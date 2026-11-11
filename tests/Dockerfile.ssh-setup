@@ -1,0 +1,8 @@
+FROM alpine:3.20
+RUN apk add --no-cache openssh-client openssh-server sshpass dropbear python3 py3-pytest py3-yaml
+WORKDIR /app
+COPY bin /app/bin
+COPY web/settings.schema.json /app/web/settings.schema.json
+COPY tests /app/tests
+ENV SSH_SETUP_INTEGRATION=1
+CMD ["python3", "-m", "pytest", "-q", "tests/test_ssh_setup.py", "tests/test_ssh_setup_integration.py"]

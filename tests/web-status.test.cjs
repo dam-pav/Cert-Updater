@@ -53,6 +53,55 @@ test('SSH setup uses the host private-key path and quotes it for the shell', () 
     assert.doesNotMatch(elements.sshCommand.value, /ssh -i/);
 });
 
+function sshInstaller(authFetch, role = 'admin') {
+    const elements = Object.fromEntries(['sshPassword', 'sshKeyPath', 'sshInstallResult',
+        'installSshBtn', 'reloadSshBtn'].map(id => [id, { value: '', disabled: false, textContent: '' }]));
+    elements.sshHostSelect = { selectedOptions: [{ dataset: { hostName: 'router' } }], disabled: false };
+    elements.sshPassword.value = 'one-time password';
+    const context = vm.createContext({
+        document: { getElementById: id => elements[id] },
+        CURRENT_USER: { role }, SSH_INSTALLING: false, authFetch, setSshStatus() {}
+    });
+    vm.runInContext(html.match(/        async function installSshKey\([^]*?\n        }/)[0], context);
+    return { context, elements };
+}
+
+test('SSH installation sends the configured host and clears the password before awaiting the response', async () => {
+    let finish;
+    let request;
+    const { context, elements } = sshInstaller((url, options) => {
+        request = { url, ...options };
+        return new Promise(resolve => { finish = resolve; });
+    });
+    const pending = context.installSshKey({ preventDefault() {} });
+    assert.equal(elements.sshPassword.value, '');
+    assert.equal(elements.installSshBtn.disabled, true);
+    assert.equal(elements.sshHostSelect.disabled, true);
+    assert.equal(request.url, 'api/ssh/install-key');
+    assert.deepEqual(JSON.parse(request.body), {
+        host: 'router', password: 'one-time password', authorized_keys_path: ''
+    });
+    finish({ ok: true, json: async () => ({ platform: 'ASUS-WRT', ssh_server: 'dropbear',
+        uid: '0', message: 'Key-only login verified.', persistence: 'nvram' }) });
+    await pending;
+    assert.match(elements.sshInstallResult.textContent, /Key-only login verified.*Saved in router settings/);
+    assert.equal(elements.sshPassword.value, '');
+    assert.equal(elements.installSshBtn.disabled, false);
+    assert.equal(elements.sshHostSelect.disabled, false);
+});
+
+test('SSH installation errors are visible and viewer accounts cannot submit', async () => {
+    const { context, elements } = sshInstaller(async () => ({
+        ok: false, json: async () => ({ error: 'SSH authentication failed.' })
+    }));
+    await context.installSshKey({ preventDefault() {} });
+    assert.equal(elements.sshInstallResult.textContent, 'SSH authentication failed.');
+    assert.equal(elements.sshPassword.value, '');
+    assert.equal(elements.installSshBtn.disabled, false);
+    const viewer = sshInstaller(() => { assert.fail('viewer submitted SSH credentials'); }, 'viewer');
+    await viewer.context.installSshKey({ preventDefault() {} });
+});
+
 test('a valid local certificate exposes SSH rejection on the default page', () => {
     const { context, elements } = dashboard();
     const hosts = [{ name: 'router', operational: 'MissingKey' }];

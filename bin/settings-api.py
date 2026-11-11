@@ -19,6 +19,8 @@ import yaml
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from ssh_setup import SshSetupError, install_ssh_key
+
 SETTINGS_PATH = os.environ.get("SETTINGS_PATH", "/cert-updater/config/settings.yml")
 SCHEMA_PATH = os.environ.get("SETTINGS_SCHEMA_PATH", "/cert-updater/web/settings.schema.json")
 CREDENTIALS_PATH = os.environ.get("CREDENTIALS_PATH", "/cert-updater/config/users.json")
@@ -552,7 +554,39 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = normalized_path(self.path)
-        if path == "/api/sync/run":
+        if path == "/api/ssh/install-key":
+            if not self._require_role("admin"):
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 8192:
+                    self._send_json(400, {"error": "SSH setup request must be at most 8192 bytes."})
+                    return
+                payload, error = read_json_body(self)
+                if error or not isinstance(payload, dict):
+                    self._send_json(400, {"error": "SSH setup requires a JSON object."})
+                    return
+                name = payload.get("host")
+                with open(SETTINGS_PATH) as f:
+                    settings = yaml.safe_load(f) or {}
+                hosts = settings.get("hosts", {})
+                host = hosts.get(name) if isinstance(name, str) else None
+                if not isinstance(host, dict):
+                    self._send_json(400, {"error": "Select a configured host."})
+                    return
+                result = install_ssh_key(
+                    name, host.get("url"), payload.get("password"),
+                    payload.get("authorized_keys_path", ""),
+                    SSH_PUBLIC_KEY_PATH, SSH_RUNTIME_DIR,
+                )
+                self._send_json(200, result, {"Cache-Control": "no-store"})
+            except SshSetupError as e:
+                self._send_json(422, {"error": str(e)}, {"Cache-Control": "no-store"})
+            except (ValueError, UnicodeError):
+                self._send_json(400, {"error": "Invalid SSH setup request."})
+            except (OSError, AttributeError, yaml.YAMLError):
+                self._send_json(500, {"error": "SSH setup could not read configuration or access runtime storage."})
+        elif path == "/api/sync/run":
             if not self._require_role("admin"):
                 return
             try:

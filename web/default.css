@@ -273,7 +273,8 @@
             font-weight: 600;
         }
 
-        .ssh-field select {
+        .ssh-field select,
+        .ssh-field input {
             width: 100%;
             background: var(--bg-control);
             border: 1px solid var(--border);
@@ -284,7 +285,8 @@
             outline: none;
         }
 
-        .ssh-field select:focus {
+        .ssh-field select:focus,
+        .ssh-field input:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-glow);
         }
@@ -293,6 +295,10 @@
             color: var(--text-secondary);
             font-size: 0.86rem;
             line-height: 1.5;
+        }
+
+        #sshInstallForm[hidden] {
+            display: none;
         }
 
         .ssh-status {

@@ -10,6 +10,7 @@ RUN apk add --no-cache \
       openssl \
       ca-certificates \
       openssh-client \
+      sshpass \
       rsync \
       yq-go \
       py3-yaml
@@ -46,6 +47,7 @@ COPY bin/deployment-state.sh /cert-updater/bin/deployment-state.sh
 COPY bin/update-status.sh /cert-updater/bin/update-status.sh
 COPY bin/renewal-schedule.sh /cert-updater/bin/renewal-schedule.sh
 COPY bin/settings-api.py /cert-updater/bin/settings-api.py
+COPY bin/ssh_setup.py /cert-updater/bin/ssh_setup.py
 COPY bin/hash-password.py /cert-updater/bin/hash-password.py
 COPY entrypoint.sh    /entrypoint.sh
 COPY VERSION /cert-updater/VERSION
