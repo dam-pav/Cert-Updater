@@ -188,6 +188,38 @@ def test_dropbear_nonroot_uses_home_directory(identity, tmp_path, start_server):
 
 
 @pytest.fixture
+def missing_router_tools(account, tmp_path):
+    """Model firmware that ships BusyBox without utility symlinks such as id."""
+    moved = []
+    try:
+        for name in ("id", "uname", "awk", "tr", "wc", "mkdir", "chmod"):
+            for prefix in ("/bin", "/usr/bin", "/sbin", "/usr/sbin"):
+                command = Path(prefix) / name
+                if command.is_symlink() or command.exists():
+                    backup = tmp_path / f"utility-{len(moved)}"
+                    command.rename(backup)
+                    moved.append((command, backup))
+        check = subprocess.run(
+            ["sh", "-c", "id -u"], capture_output=True, text=True, check=False
+        )
+        assert check.returncode == 127
+        assert "not found" in check.stderr
+        yield
+    finally:
+        for command, backup in reversed(moved):
+            backup.rename(command)
+
+
+def test_dropbear_install_without_router_utility_symlinks(
+    identity, tmp_path, start_server, missing_router_tools
+):
+    result = setup(identity, tmp_path, start_server("dropbear"))
+    assert result["status"] == "ok"
+    assert result["uid"] != "0"
+    assert result["authorized_keys_path"] == "/home/sshsetup/.ssh/authorized_keys"
+
+
+@pytest.fixture
 def root_keys():
     root_ssh = Path("/root/.ssh")
     assert not root_ssh.exists(), "Router fixtures require a disposable container"
@@ -216,7 +248,7 @@ def test_openwrt_root_uses_global_key_file(identity, tmp_path, start_server, roo
 
 
 def test_asuswrt_persists_keys_and_preserves_existing_nvram(
-    identity, tmp_path, start_server, root_keys
+    identity, tmp_path, start_server, root_keys, missing_router_tools
 ):
     nvram = Path("/usr/bin/nvram")
     stored = tmp_path / "sshd_authkeys"

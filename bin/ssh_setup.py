@@ -47,18 +47,57 @@ set -eu
 umask 077
 fail() { printf 'ACME_ERROR=%s\n' "$1"; exit 1; }
 printf 'ACME_LOGIN=ok\nACME_STAGE=detect\n'
-uid=$(id -u)
-platform=$(uname -s)
+# Non-interactive router shells may have a short PATH or omit applet symlinks.
+PATH=${PATH:-/usr/bin:/bin}:/usr/sbin:/sbin:/usr/bin:/bin:/opt/sbin:/opt/bin
+export PATH
+router_tool() {
+    utility=$1
+    shift
+    if command -v "$utility" >/dev/null 2>&1; then
+        "$utility" "$@"
+    else
+        busybox "$utility" "$@"
+    fi
+}
+for utility in uname awk tr wc mkdir chmod; do
+    if ! command -v "$utility" >/dev/null 2>&1; then
+        if ! command -v busybox >/dev/null 2>&1 ||
+           ! busybox "$utility" --help >/dev/null 2>&1; then
+            fail "Required router utility '$utility' is unavailable, including in BusyBox."
+        fi
+    fi
+done
+uid=
+uid_source=proc
+if [ -r "/proc/$$/status" ]; then
+    while read -r field real effective rest; do
+        case "$field" in Uid:) uid=$effective; break ;; esac
+    done < "/proc/$$/status"
+fi
+if [ -z "$uid" ]; then
+    uid_source=id
+    uid=$(id -u 2>/dev/null || busybox id -u 2>/dev/null || true)
+fi
+case "$uid" in ''|*[!0-9]*) fail 'Cannot determine the remote account UID from /proc or id.' ;; esac
+printf 'ACME_UID_SOURCE=%s\n' "$uid_source"
+platform=$(router_tool uname -s)
 server=unknown
 pid=$$
 for step in 1 2 3 4 5 6; do
-    [ -r "/proc/$pid/comm" ] || break
-    comm=$(cat "/proc/$pid/comm")
+    [ -r "/proc/$pid/status" ] || break
+    comm=
+    parent=
+    while read -r field value rest; do
+        case "$field" in
+            Name:) comm=$value ;;
+            PPid:) parent=$value ;;
+        esac
+    done < "/proc/$pid/status"
     case "$comm" in
         dropbear*) server=dropbear; break ;;
         sshd*) server=openssh; break ;;
     esac
-    pid=$(awk '/^PPid:/ {print $2}' "/proc/$pid/status")
+    pid=$parent
     [ -n "$pid" ] && [ "$pid" != 0 ] || break
 done
 if [ -f /etc/openwrt_release ]; then
@@ -88,33 +127,34 @@ printf 'ACME_PLATFORM=%s\nACME_SERVER=%s\nACME_UID=%s\nACME_PATH=%s\n' "$platfor
 if [ "$persist" = nvram ]; then
     printf 'ACME_STAGE=persist-router-settings\n'
     stored=$(nvram get sshd_authkeys)
-    persistent_key=$(printf '%s' "$key" | tr '>' ' ')
-    if ! printf '%s\n' "$stored" | tr '>' '\n' | awk -v blob="$blob" '
+    persistent_key=$(printf '%s' "$key" | router_tool tr '>' ' ')
+    if ! printf '%s\n' "$stored" | router_tool tr '>' '\n' | router_tool awk -v blob="$blob" '
         {for (i=1; i<=NF; i++) if ($i == blob) found=1} END {exit !found}'; then
         if [ -n "$stored" ]; then stored="$stored>$persistent_key"; else stored=$persistent_key; fi
-        [ "$(printf '%s' "$stored" | wc -c)" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
+        [ "$(printf '%s' "$stored" | router_tool wc -c)" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
         nvram set "sshd_authkeys=$stored" || fail 'Could not update router authorized keys.'
     fi
-    [ "$(printf '%s' "$stored" | wc -c)" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
+    [ "$(printf '%s' "$stored" | router_tool wc -c)" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
     # Commit even on retry: an earlier request may have set RAM successfully but
     # failed to save it to flash.
     nvram commit || fail 'Could not persist router authorized keys.'
 fi
 printf 'ACME_STAGE=write-authorized-key\n'
-dir=$(dirname "$path")
+dir=${path%/*}
+[ -n "$dir" ] || dir=/
 [ ! -d "$path" ] || fail 'The authorized-key path refers to a directory.'
 if [ -e "$path" ] || [ -L "$path" ]; then
     [ -f "$path" ] || fail 'The authorized-key path is not a regular file.'
 fi
-mkdir -p "$dir" || fail 'Could not create the authorized-key directory.'
+router_tool mkdir -p "$dir" || fail 'Could not create the authorized-key directory.'
 # Do not change permissions of shared directories such as /etc or /home.
 case "$dir" in
     */.ssh|/etc/dropbear)
-        chmod 700 "$dir" || fail 'Could not set authorized-key directory permissions.' ;;
+        router_tool chmod 700 "$dir" || fail 'Could not set authorized-key directory permissions.' ;;
 esac
-touch "$path" || fail 'Could not write the authorized-key file.'
-chmod 600 "$path" || fail 'Could not set authorized-key permissions.'
-if ! awk -v blob="$blob" '
+: >> "$path" || fail 'Could not write the authorized-key file.'
+router_tool chmod 600 "$path" || fail 'Could not set authorized-key permissions.'
+if ! router_tool awk -v blob="$blob" '
     {for (i=1; i<=NF; i++) if ($i == blob) found=1} END {exit !found}' "$path"; then
     # Leading newline also handles a pre-existing final line without a newline.
     printf '\n%s\n' "$key" >> "$path" || fail 'Could not append the public key.'
@@ -320,7 +360,15 @@ def _install_ssh_key(
             remote_stage=details.get("STAGE", "unknown"),
             **{
                 name.lower(): details[name]
-                for name in ("PLATFORM", "SERVER", "UID", "PATH", "PERSIST", "ERROR")
+                for name in (
+                    "PLATFORM",
+                    "SERVER",
+                    "UID",
+                    "UID_SOURCE",
+                    "PATH",
+                    "PERSIST",
+                    "ERROR",
+                )
                 if name in details
             },
         )
