@@ -43,30 +43,68 @@ def log_setup_event(host, stage, password="", **fields):
 # Detect the serving daemon through process ancestry, rather than the presence of
 # a binary: routers can run OpenSSH and Dropbear on different ports.
 INSTALL_SCRIPT = r"""
-set -eu
+set -efu
 umask 077
+LC_ALL=C
+export LC_ALL
 fail() { printf 'ACME_ERROR=%s\n' "$1"; exit 1; }
 printf 'ACME_LOGIN=ok\nACME_STAGE=detect\n'
 # Non-interactive router shells may have a short PATH or omit applet symlinks.
 PATH=${PATH:-/usr/bin:/bin}:/usr/sbin:/sbin:/usr/bin:/bin:/opt/sbin:/opt/bin
 export PATH
+# Scan PATH without depending on command-lookup shell builtins or help probes.
+find_executable() (
+    IFS=:
+    for executable_dir in $PATH; do
+        [ -n "$executable_dir" ] || executable_dir=.
+        if [ -f "$executable_dir/$1" ] && [ -x "$executable_dir/$1" ]; then
+            printf '%s\n' "$executable_dir/$1"
+            exit 0
+        fi
+    done
+    exit 1
+)
+busybox_bin=$(find_executable busybox || true)
 router_tool() {
-    utility=$1
+    utility_name=$1
     shift
-    if command -v "$utility" >/dev/null 2>&1; then
-        "$utility" "$@"
+    executable=$(find_executable "$utility_name" || true)
+    if [ -n "$executable" ]; then
+        "$executable" "$@"
+    elif [ -n "$busybox_bin" ]; then
+        "$busybox_bin" "$utility_name" "$@"
     else
-        busybox "$utility" "$@"
+        fail "Required router utility '$utility_name' is unavailable."
     fi
 }
-for utility in uname awk tr wc mkdir chmod; do
-    if ! command -v "$utility" >/dev/null 2>&1; then
-        if ! command -v busybox >/dev/null 2>&1 ||
-           ! busybox "$utility" --help >/dev/null 2>&1; then
-            fail "Required router utility '$utility' is unavailable, including in BusyBox."
-        fi
-    fi
-done
+# Match the key type and blob without awk, retaining existing options/comments.
+# Globbing is disabled above; splitting fields never executes their contents.
+key_exists() {
+    while IFS= read -r key_line || [ -n "$key_line" ]; do
+        previous=
+        first=yes
+        for key_field in $key_line; do
+            if [ "$first" = yes ]; then
+                case "$key_field" in \#*) break ;; esac
+                first=no
+            fi
+            if [ "$previous" = ssh-ed25519 ] && [ "$key_field" = "$blob" ]; then
+                return 0
+            fi
+            previous=$key_field
+        done
+    done
+    return 1
+}
+replace_gt() {
+    gt_rest=$1
+    while :; do
+        case "$gt_rest" in
+            *'>'*) printf '%s%s' "${gt_rest%%>*}" "$2"; gt_rest=${gt_rest#*>} ;;
+            *) printf '%s\n' "$gt_rest"; break ;;
+        esac
+    done
+}
 uid=
 uid_source=proc
 if [ -r "/proc/$$/status" ]; then
@@ -76,11 +114,14 @@ if [ -r "/proc/$$/status" ]; then
 fi
 if [ -z "$uid" ]; then
     uid_source=id
-    uid=$(id -u 2>/dev/null || busybox id -u 2>/dev/null || true)
+    uid=$(id -u 2>/dev/null || router_tool id -u 2>/dev/null || true)
 fi
 case "$uid" in ''|*[!0-9]*) fail 'Cannot determine the remote account UID from /proc or id.' ;; esac
 printf 'ACME_UID_SOURCE=%s\n' "$uid_source"
-platform=$(router_tool uname -s)
+platform=unknown
+if [ -r /proc/sys/kernel/ostype ]; then
+    IFS= read -r platform < /proc/sys/kernel/ostype || platform=unknown
+fi
 server=unknown
 pid=$$
 for step in 1 2 3 4 5 6; do
@@ -100,10 +141,11 @@ for step in 1 2 3 4 5 6; do
     pid=$parent
     [ -n "$pid" ] && [ "$pid" != 0 ] || break
 done
+nvram_bin=$(find_executable nvram || true)
 if [ -f /etc/openwrt_release ]; then
     platform=OpenWrt
-elif command -v nvram >/dev/null 2>&1 && [ -n "$(nvram get productid)" ] &&
-     [ -n "$(nvram get firmver)" ]; then
+elif [ -n "$nvram_bin" ] && [ -n "$("$nvram_bin" get productid)" ] &&
+     [ -n "$("$nvram_bin" get firmver)" ]; then
     platform=ASUS-WRT
 fi
 persist=none
@@ -126,18 +168,18 @@ printf 'ACME_PLATFORM=%s\nACME_SERVER=%s\nACME_UID=%s\nACME_PATH=%s\n' "$platfor
 # and reads sshd_authkeys into a 3500-byte buffer (including its NUL terminator).
 if [ "$persist" = nvram ]; then
     printf 'ACME_STAGE=persist-router-settings\n'
-    stored=$(nvram get sshd_authkeys)
-    persistent_key=$(printf '%s' "$key" | router_tool tr '>' ' ')
-    if ! printf '%s\n' "$stored" | router_tool tr '>' '\n' | router_tool awk -v blob="$blob" '
-        {for (i=1; i<=NF; i++) if ($i == blob) found=1} END {exit !found}'; then
+    stored=$("$nvram_bin" get sshd_authkeys)
+    persistent_key=$(replace_gt "$key" ' ')
+    if ! replace_gt "$stored" '
+' | key_exists; then
         if [ -n "$stored" ]; then stored="$stored>$persistent_key"; else stored=$persistent_key; fi
-        [ "$(printf '%s' "$stored" | router_tool wc -c)" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
-        nvram set "sshd_authkeys=$stored" || fail 'Could not update router authorized keys.'
+        [ "${#stored}" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
+        "$nvram_bin" set "sshd_authkeys=$stored" || fail 'Could not update router authorized keys.'
     fi
-    [ "$(printf '%s' "$stored" | router_tool wc -c)" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
+    [ "${#stored}" -le 3499 ] || fail 'Router authorized keys exceed the firmware limit. Remove unused keys in the router UI first.'
     # Commit even on retry: an earlier request may have set RAM successfully but
     # failed to save it to flash.
-    nvram commit || fail 'Could not persist router authorized keys.'
+    "$nvram_bin" commit || fail 'Could not persist router authorized keys.'
 fi
 printf 'ACME_STAGE=write-authorized-key\n'
 dir=${path%/*}
@@ -154,8 +196,7 @@ case "$dir" in
 esac
 : >> "$path" || fail 'Could not write the authorized-key file.'
 router_tool chmod 600 "$path" || fail 'Could not set authorized-key permissions.'
-if ! router_tool awk -v blob="$blob" '
-    {for (i=1; i<=NF; i++) if ($i == blob) found=1} END {exit !found}' "$path"; then
+if ! key_exists < "$path"; then
     # Leading newline also handles a pre-existing final line without a newline.
     printf '\n%s\n' "$key" >> "$path" || fail 'Could not append the public key.'
 fi

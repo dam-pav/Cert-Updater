@@ -5,16 +5,19 @@ docker run --rm cert-updater-ssh-tests
 """
 
 import os
+import shlex
 import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
+import ssh_setup
 from ssh_setup import SshSetupError, install_ssh_key
 
 pytestmark = pytest.mark.skipif(
@@ -220,6 +223,32 @@ def test_dropbear_install_without_router_utility_symlinks(
 
 
 @pytest.fixture
+def restricted_router_shell(missing_router_tools, monkeypatch):
+    """Only file-writing applets work; command -v and help probes do not."""
+    with tempfile.TemporaryDirectory(prefix="router-shell-", dir="/tmp") as directory:
+        path = Path(directory)
+        path.chmod(0o755)
+        busybox = path / "busybox"
+        busybox.write_text("""#!/bin/sh
+applet=$1
+shift
+[ "${1:-}" != --help ] || exit 1
+case "$applet" in
+    mkdir|chmod) /bin/busybox "$applet" "$@" ;;
+    *) printf '%s: applet not found\n' "$applet" >&2; exit 127 ;;
+esac
+""")
+        busybox.chmod(0o755)
+        monkeypatch.setattr(
+            ssh_setup,
+            "INSTALL_SCRIPT",
+            "command() { return 127; }\n"
+            f"PATH={shlex.quote(directory)}:$PATH\n" + ssh_setup.INSTALL_SCRIPT,
+        )
+        yield
+
+
+@pytest.fixture
 def root_keys():
     root_ssh = Path("/root/.ssh")
     assert not root_ssh.exists(), "Router fixtures require a disposable container"
@@ -248,7 +277,7 @@ def test_openwrt_root_uses_global_key_file(identity, tmp_path, start_server, roo
 
 
 def test_asuswrt_persists_keys_and_preserves_existing_nvram(
-    identity, tmp_path, start_server, root_keys, missing_router_tools
+    identity, tmp_path, start_server, root_keys, restricted_router_shell
 ):
     nvram = Path("/usr/bin/nvram")
     stored = tmp_path / "sshd_authkeys"
@@ -287,5 +316,10 @@ esac
         with pytest.raises(SshSetupError, match="firmware limit"):
             setup(identity, tmp_path, port, user="homologue")
         assert stored.read_text() == "x" * 3499
+        unicode_keys = "#" + "é" * 1749
+        stored.write_text(unicode_keys)
+        with pytest.raises(SshSetupError, match="firmware limit"):
+            setup(identity, tmp_path, port, user="homologue")
+        assert stored.read_text() == unicode_keys
     finally:
         nvram.unlink()

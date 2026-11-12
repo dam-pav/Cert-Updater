@@ -75,6 +75,34 @@ def test_existing_key_with_other_comment_or_options_is_preserved(tmp_path):
     assert key_path.read_text() == original
 
 
+def test_existing_key_options_with_quoted_spaces_and_hash_are_preserved(tmp_path):
+    key_path = tmp_path / "authorized_keys"
+    original = 'command="echo # restricted",restrict ' + PUBLIC_KEY + "\n"
+    key_path.write_text(original)
+    subprocess.run(
+        ["sh"],
+        input=ssh_setup.install_script(PUBLIC_KEY, str(key_path)),
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    assert key_path.read_text() == original
+
+
+def test_commented_public_key_does_not_count_as_installed(tmp_path):
+    key_path = tmp_path / "authorized_keys"
+    original = "  # " + PUBLIC_KEY + "\n"
+    key_path.write_text(original)
+    subprocess.run(
+        ["sh"],
+        input=ssh_setup.install_script(PUBLIC_KEY, str(key_path)),
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    assert key_path.read_text() == original + "\n" + PUBLIC_KEY + "\n"
+
+
 def test_override_cannot_chmod_a_directory(tmp_path):
     target = tmp_path / "shared"
     target.mkdir(mode=0o755)
