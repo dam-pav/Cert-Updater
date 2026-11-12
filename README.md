@@ -411,6 +411,21 @@ docker exec cert-updater /cert-updater/bin/sync-certs.sh
 
 ## Troubleshooting
 
+### SSH Key Installation Fails
+
+Watch the worker logs while retrying **Install SSH key** in the dashboard:
+
+```bash
+docker logs --since 5m -f cert-updater
+```
+
+Records prefixed `SSH key setup` show request receipt, installation stages,
+detected firmware and account, the authorized-key path, SSH exit codes and
+error output. The submitted password and private-key blocks are redacted.
+These records are in the worker's logs, not the web container's logs.
+If no request record appears, check the web container's logs and the browser's
+network response for `/api/ssh/install-key`.
+
 ### Permission Denied on SSH
 
 - Ensure the public key is in the correct file on the target host

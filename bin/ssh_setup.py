@@ -1,15 +1,42 @@
 """Install the updater public key using a one-time SSH password."""
 
+import json
 import os
 import re
 import shlex
 import signal
 import subprocess
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 
 class SshSetupError(Exception):
     """A setup failure safe to return to the browser."""
+
+
+def log_setup_event(host, stage, password="", **fields):
+    """Emit one bounded JSON record to the worker's container logs."""
+
+    def clean(value):
+        text = str(value)
+        if isinstance(password, str) and password:
+            text = text.replace(password, "[password redacted]")
+        text = re.sub(
+            r"-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----",
+            "[private key redacted]",
+            text,
+            flags=re.DOTALL,
+        )
+        return text[:2000]
+
+    record = {
+        "time": datetime.now(UTC).isoformat(),
+        "host": clean(host),
+        "stage": stage,
+        **{name: clean(value) for name, value in fields.items()},
+    }
+    print("SSH key setup " + json.dumps(record), file=sys.stderr, flush=True)
 
 
 # Only POSIX shell and tools available on BusyBox routers are required remotely.
@@ -19,6 +46,7 @@ INSTALL_SCRIPT = r"""
 set -eu
 umask 077
 fail() { printf 'ACME_ERROR=%s\n' "$1"; exit 1; }
+printf 'ACME_LOGIN=ok\nACME_STAGE=detect\n'
 uid=$(id -u)
 platform=$(uname -s)
 server=unknown
@@ -58,6 +86,7 @@ printf 'ACME_PLATFORM=%s\nACME_SERVER=%s\nACME_UID=%s\nACME_PATH=%s\n' "$platfor
 # Preserve firmware-managed keys across restarts. Merlin encodes newlines as >
 # and reads sshd_authkeys into a 3500-byte buffer (including its NUL terminator).
 if [ "$persist" = nvram ]; then
+    printf 'ACME_STAGE=persist-router-settings\n'
     stored=$(nvram get sshd_authkeys)
     persistent_key=$(printf '%s' "$key" | tr '>' ' ')
     if ! printf '%s\n' "$stored" | tr '>' '\n' | awk -v blob="$blob" '
@@ -71,6 +100,7 @@ if [ "$persist" = nvram ]; then
     # failed to save it to flash.
     nvram commit || fail 'Could not persist router authorized keys.'
 fi
+printf 'ACME_STAGE=write-authorized-key\n'
 dir=$(dirname "$path")
 [ ! -d "$path" ] || fail 'The authorized-key path refers to a directory.'
 if [ -e "$path" ] || [ -L "$path" ]; then
@@ -78,7 +108,10 @@ if [ -e "$path" ] || [ -L "$path" ]; then
 fi
 mkdir -p "$dir" || fail 'Could not create the authorized-key directory.'
 # Do not change permissions of shared directories such as /etc or /home.
-case "$dir" in */.ssh|/etc/dropbear) chmod 700 "$dir" ;; esac
+case "$dir" in
+    */.ssh|/etc/dropbear)
+        chmod 700 "$dir" || fail 'Could not set authorized-key directory permissions.' ;;
+esac
 touch "$path" || fail 'Could not write the authorized-key file.'
 chmod 600 "$path" || fail 'Could not set authorized-key permissions.'
 if ! awk -v blob="$blob" '
@@ -128,11 +161,11 @@ def run_password_ssh(command, password, script):
         ) as process:
             try:
                 stdout, stderr = process.communicate(script, timeout=30)
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as exc:
                 # sshpass starts ssh as a child. Stop both, including any open
                 # output pipes, rather than leaving the SSH session running.
                 os.killpg(process.pid, signal.SIGKILL)
-                process.communicate()
+                exc.stdout, exc.stderr = process.communicate()
                 raise
             return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
     finally:
@@ -143,18 +176,55 @@ def run_password_ssh(command, password, script):
 
 def connection_error(result):
     output = result.stderr.lower()
+    details = metadata(result.stdout)
+    if details.get("LOGIN") == "ok" or "UID" in details:
+        return "SSH login succeeded, but remote key installation failed. Check the worker logs for the failing operation and target permissions."
     if (
         "host key verification failed" in output
         or "remote host identification has changed" in output
     ):
         return "SSH host key does not match the trusted key. Check the target's identity before updating its trusted key."
-    if result.returncode == 5 or "permission denied" in output:
+    if result.returncode == 5 or (
+        result.returncode == 255
+        and re.search(
+            r"permission denied\s*\([^)]*(?:password|publickey|keyboard-interactive)[^)]*\)",
+            output,
+        )
+    ):
         return "SSH authentication failed. Check the password and whether password login is enabled."
     return "SSH connection or remote setup failed. Check the target address, SSH access and account permissions."
 
 
 def install_ssh_key(
     host_name, target, password, override, public_key_path, runtime_dir
+):
+    """Log installation progress and failures without retaining the password."""
+    stage = "validation"
+
+    def report(next_stage, **fields):
+        nonlocal stage
+        stage = next_stage
+        log_setup_event(host_name, stage, password, **fields)
+
+    report("validation", status="started")
+    try:
+        return _install_ssh_key(
+            host_name, target, password, override, public_key_path, runtime_dir, report
+        )
+    except Exception as exc:
+        report(
+            stage,
+            status="failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            cause=str(exc.__cause__ or ""),
+            diagnostic=getattr(exc.__cause__, "stderr", "") or "",
+        )
+        raise
+
+
+def _install_ssh_key(
+    host_name, target, password, override, public_key_path, runtime_dir, report
 ):
     if (
         not isinstance(host_name, str)
@@ -191,6 +261,7 @@ def install_ssh_key(
         raise SshSetupError(
             "The authorized-key path override must be an absolute path without control characters."
         )
+    report("local-key", status="reading")
     public_path = Path(public_key_path)
     private_path = public_path.with_suffix("")
     try:
@@ -200,6 +271,7 @@ def install_ssh_key(
     except OSError as exc:
         raise SshSetupError("The updater SSH key could not be read.") from exc
     script = install_script(public_key, override)
+    report("host-key-storage", status="preparing")
     known_hosts = Path(runtime_dir) / host_name / "known_hosts"
     known_hosts.parent.mkdir(parents=True, exist_ok=True)
     common = [
@@ -221,6 +293,7 @@ def install_ssh_key(
         "ControlPath=none",
     ]
     try:
+        report("password-login-and-install", status="connecting", target=target)
         result = run_password_ssh(
             common
             + [
@@ -239,12 +312,25 @@ def install_ssh_key(
             script,
         )
         details = metadata(result.stdout)
+        report(
+            "password-login-and-install",
+            status="finished",
+            exit_code=result.returncode,
+            diagnostic=result.stderr,
+            remote_stage=details.get("STAGE", "unknown"),
+            **{
+                name.lower(): details[name]
+                for name in ("PLATFORM", "SERVER", "UID", "PATH", "PERSIST", "ERROR")
+                if name in details
+            },
+        )
         if result.returncode:
             raise SshSetupError(details.get("ERROR") or connection_error(result))
         if not details.get("PATH") or "PERSIST" not in details:
             raise SshSetupError(
                 "The remote installer did not complete. Check that the account permits shell commands."
             )
+        report("key-only-verification", status="connecting", path=details["PATH"])
         verified = subprocess.run(
             common
             + [
@@ -270,6 +356,12 @@ def install_ssh_key(
             timeout=15,
             check=False,
         )
+        report(
+            "key-only-verification",
+            status="finished",
+            exit_code=verified.returncode,
+            diagnostic=verified.stderr,
+        )
         if verified.returncode:
             raise SshSetupError(
                 f"Key installed at {details['PATH']}, but key-only login failed. "
@@ -284,6 +376,7 @@ def install_ssh_key(
         raise SshSetupError(
             "SSH setup could not run. Check that ssh and sshpass are installed and runtime storage is writable."
         ) from exc
+    report("complete", status="success", path=details["PATH"])
     return {
         "status": "ok",
         "message": f"Key installed at {details['PATH']}. Key-only login verified.",

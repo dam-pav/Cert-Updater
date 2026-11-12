@@ -19,7 +19,7 @@ import yaml
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from ssh_setup import SshSetupError, install_ssh_key
+from ssh_setup import SshSetupError, install_ssh_key, log_setup_event
 
 SETTINGS_PATH = os.environ.get("SETTINGS_PATH", "/cert-updater/config/settings.yml")
 SCHEMA_PATH = os.environ.get("SETTINGS_SCHEMA_PATH", "/cert-updater/web/settings.schema.json")
@@ -555,15 +555,19 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         path = normalized_path(self.path)
         if path == "/api/ssh/install-key":
+            log_setup_event("", "request", status="received")
             if not self._require_role("admin"):
+                log_setup_event("", "request", status="rejected", reason="admin access required")
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 8192:
+                    log_setup_event("", "request", status="rejected", reason="invalid request size")
                     self._send_json(400, {"error": "SSH setup request must be at most 8192 bytes."})
                     return
                 payload, error = read_json_body(self)
                 if error or not isinstance(payload, dict):
+                    log_setup_event("", "request", status="rejected", reason="invalid JSON object")
                     self._send_json(400, {"error": "SSH setup requires a JSON object."})
                     return
                 name = payload.get("host")
@@ -572,6 +576,7 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
                 hosts = settings.get("hosts", {})
                 host = hosts.get(name) if isinstance(name, str) else None
                 if not isinstance(host, dict):
+                    log_setup_event("", "request", status="rejected", reason="host not configured")
                     self._send_json(400, {"error": "Select a configured host."})
                     return
                 result = install_ssh_key(
@@ -583,8 +588,11 @@ class SettingsHandler(http.server.BaseHTTPRequestHandler):
             except SshSetupError as e:
                 self._send_json(422, {"error": str(e)}, {"Cache-Control": "no-store"})
             except (ValueError, UnicodeError):
+                log_setup_event("", "request", status="failed", reason="invalid request")
                 self._send_json(400, {"error": "Invalid SSH setup request."})
-            except (OSError, AttributeError, yaml.YAMLError):
+            except (OSError, AttributeError, yaml.YAMLError) as e:
+                log_setup_event("", "request", status="failed", reason="configuration or runtime access failed",
+                                error_type=type(e).__name__)
                 self._send_json(500, {"error": "SSH setup could not read configuration or access runtime storage."})
         elif path == "/api/sync/run":
             if not self._require_role("admin"):

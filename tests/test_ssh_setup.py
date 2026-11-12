@@ -112,7 +112,7 @@ def test_rejects_invalid_inputs_before_connecting(keys, tmp_path, kwargs):
         connect.assert_not_called()
 
 
-def test_success_requires_a_separate_key_only_connection(keys, tmp_path):
+def test_success_requires_a_separate_key_only_connection(keys, tmp_path, capsys):
     with (
         patch.object(
             ssh_setup,
@@ -138,6 +138,12 @@ def test_success_requires_a_separate_key_only_connection(keys, tmp_path):
     assert "ControlPath=none" in verify_command
     assert str(keys.with_suffix("")) in verify_command
     assert f"UserKnownHostsFile={tmp_path}/runtime/router/known_hosts" in verify_command
+    records = [
+        json.loads(line.removeprefix("SSH key setup "))
+        for line in capsys.readouterr().err.splitlines()
+    ]
+    assert records[-1]["stage"] == "complete"
+    assert records[-1]["status"] == "success"
 
 
 def test_failed_key_only_connection_is_not_success(keys, tmp_path):
@@ -166,10 +172,16 @@ def test_failed_key_only_connection_is_not_success(keys, tmp_path):
         (255, "REMOTE HOST IDENTIFICATION HAS CHANGED!", "does not match"),
         (255, "Host key verification failed.", "does not match"),
         (255, "Connection refused", "connection or remote setup failed"),
+        (255, "Permission denied (publickey,password).", "authentication failed"),
+        (
+            1,
+            "chmod: /root/.ssh: Permission denied",
+            "connection or remote setup failed",
+        ),
     ],
 )
 def test_connection_failures_do_not_leak_remote_output(
-    keys, tmp_path, code, stderr, message
+    keys, tmp_path, code, stderr, message, capsys
 ):
     with (
         patch.object(
@@ -183,6 +195,109 @@ def test_connection_failures_do_not_leak_remote_output(
     ):
         install(keys, tmp_path)
     assert "one-time-password" not in str(error.value)
+    logs = capsys.readouterr().err
+    assert "one-time-password" not in logs
+    records = [
+        json.loads(line.removeprefix("SSH key setup ")) for line in logs.splitlines()
+    ]
+    completed = next(record for record in records if record.get("exit_code"))
+    assert completed["stage"] == "password-login-and-install"
+    assert completed["exit_code"] == str(code)
+    assert stderr in completed["diagnostic"]
+    assert "[password redacted]" in completed["diagnostic"]
+    assert records[-1]["status"] == "failed"
+    assert records[-1]["host"] == "router"
+
+
+def test_remote_permission_failure_is_not_reported_as_bad_password(
+    keys, tmp_path, capsys
+):
+    output = "ACME_LOGIN=ok\nACME_STAGE=write-authorized-key\n"
+    with (
+        patch.object(
+            ssh_setup,
+            "run_password_ssh",
+            return_value=subprocess.CompletedProcess(
+                [], 1, output, "chmod: /root/.ssh: Permission denied"
+            ),
+        ),
+        pytest.raises(ssh_setup.SshSetupError, match="SSH login succeeded"),
+    ):
+        install(keys, tmp_path)
+    records = [
+        json.loads(line.removeprefix("SSH key setup "))
+        for line in capsys.readouterr().err.splitlines()
+    ]
+    operation = next(record for record in records if "remote_stage" in record)
+    assert operation["remote_stage"] == "write-authorized-key"
+    assert "chmod" in operation["diagnostic"]
+
+
+def test_verification_logs_detection_and_ssh_failure(keys, tmp_path, capsys):
+    with (
+        patch.object(
+            ssh_setup,
+            "run_password_ssh",
+            return_value=subprocess.CompletedProcess([], 0, DETAILS, ""),
+        ),
+        patch.object(
+            ssh_setup.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                [], 255, "", "no mutual signature algorithm"
+            ),
+        ),
+        pytest.raises(ssh_setup.SshSetupError),
+    ):
+        install(keys, tmp_path)
+    records = [
+        json.loads(line.removeprefix("SSH key setup "))
+        for line in capsys.readouterr().err.splitlines()
+    ]
+    detection = next(record for record in records if "platform" in record)
+    assert detection["platform"] == "Linux"
+    assert detection["uid"] == "1000"
+    assert detection["path"] == "/home/user/.ssh/authorized_keys"
+    assert records[-2]["stage"] == "key-only-verification"
+    assert records[-2]["diagnostic"] == "no mutual signature algorithm"
+    assert records[-1]["status"] == "failed"
+
+
+def test_log_output_is_bounded_single_line_and_redacts_private_keys(capsys):
+    ssh_setup.log_setup_event(
+        "router\nforged log",
+        "test",
+        "secret",
+        diagnostic="secret\n\x1b[31m "
+        "-----BEGIN OPENSSH PRIVATE KEY-----private-data-----END OPENSSH PRIVATE KEY-----"
+        + "x"
+        * 5000,
+    )
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0].removeprefix("SSH key setup "))
+    assert "secret" not in record["diagnostic"]
+    assert "private-data" not in record["diagnostic"]
+    assert len(record["diagnostic"]) <= 2000
+
+
+def test_missing_sshpass_logs_the_underlying_os_error(keys, tmp_path, capsys):
+    with (
+        patch.object(
+            ssh_setup,
+            "run_password_ssh",
+            side_effect=FileNotFoundError(2, "No such file or directory", "sshpass"),
+        ),
+        pytest.raises(ssh_setup.SshSetupError, match="could not run"),
+    ):
+        install(keys, tmp_path)
+    records = [
+        json.loads(line.removeprefix("SSH key setup "))
+        for line in capsys.readouterr().err.splitlines()
+    ]
+    assert records[-1]["stage"] == "password-login-and-install"
+    assert "sshpass" in records[-1]["cause"]
+    assert "No such file" in records[-1]["cause"]
 
 
 def test_password_is_passed_only_through_an_anonymous_pipe():
